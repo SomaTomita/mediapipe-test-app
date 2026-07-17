@@ -197,6 +197,24 @@ export function judgeReflect(
   return { flicked, remaining };
 }
 
+// ---- カウントダウン ----
+
+export const COUNTDOWN_STEP_MS = 900; // 1刻みの表示時間
+
+/**
+ * 開始カウントダウンの表示ラベル。null で開始。
+ * 固定インターバルの積み上げではなく経過時間から決定的に求める
+ * (MediaPipe 初期化等でメインスレッドが凍結しても表示と開始タイミングがズレない)。
+ */
+export function countdownLabel(elapsedMs: number): "3" | "2" | "1" | "♥" | null {
+  const step = Math.floor(elapsedMs / COUNTDOWN_STEP_MS);
+  if (step <= 0) return "3";
+  if (step === 1) return "2";
+  if (step === 2) return "1";
+  if (step === 3) return "♥";
+  return null;
+}
+
 // ---- 体力ゲージとマッチ状態 ----
 
 export type MatchPhase = "playing" | "win" | "lose" | "draw";

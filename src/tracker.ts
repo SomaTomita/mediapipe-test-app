@@ -48,6 +48,20 @@ export async function createTracker(video: HTMLVideoElement): Promise<Tracker> {
   const { face, gesture } = landmarkers;
   let lastTs = -1;
 
+  // ウォームアップ: 初回推論はグラフ初期化・delegate生成で数秒メインスレッドを
+  // ブロックするため、ローディング画面中に済ませる。対戦開始(カウントダウン)時に
+  // 走らせると rAF・タイマーが凍結し「ハート静止・カウントダウンずれ」になる。
+  if (video.readyState < 2) {
+    await new Promise<void>((resolve) => video.addEventListener("loadeddata", () => resolve(), { once: true }));
+  }
+  try {
+    lastTs = performance.now();
+    face.detectForVideo(video, lastTs);
+    gesture.recognizeForVideo(video, lastTs);
+  } catch (e) {
+    console.error("tracker warm-up failed (実ループ側で再試行される)", e);
+  }
+
   return {
     detect(now: number): Detection {
       // VIDEO モードはタイムスタンプの単調増加が必須
