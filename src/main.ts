@@ -25,6 +25,7 @@ import {
   judgeReflect,
   canReflect,
   canOpenCatch,
+  palmCenter,
   type Heart,
   type HeartKind,
   type Match,
@@ -265,7 +266,7 @@ function loop() {
   const hand = det.hands[0] ?? null;
   const thumbTip = hand?.landmarks[4] ?? null;
   const indexTip = hand?.landmarks[8] ?? null;
-  const palmRaw = hand?.landmarks[9] ?? null;
+  const palmRaw = hand ? palmCenter(hand.landmarks) : null;
   const pinched = !!(thumbTip && indexTip) && isPinched(thumbTip, indexTip);
   const pinchMidRaw = pinched && thumbTip && indexTip ? midpoint(thumbTip, indexTip) : null;
   if (pinchMidRaw) lastPinchMidRaw = pinchMidRaw;

@@ -28,6 +28,8 @@ import {
   coverMap,
   canReflect,
   canOpenCatch,
+  palmCenter,
+  PALM_CENTER_LERP,
   judgeReflect,
   createMatch,
   applyDamage,
@@ -112,12 +114,37 @@ describe("judgeCatch", () => {
     expect(remaining.map((h) => h.id)).toEqual([3]);
   });
 
-  it("つまみキャッチの半径は通常キャッチと同じ(つまめたら確実に取れる)", () => {
-    // つまむジェスチャー自体が難しいので、半径で不利にしない
-    expect(PINCH_CATCH_RADIUS).toBe(CATCH_RADIUS);
-    const hearts = spawnHeart([], 1, 0.5 + 0.1, 0);
+  it("パーのキャッチ半径は 0.10(広すぎない手応えのある判定)", () => {
+    expect(CATCH_RADIUS).toBe(0.1);
+    // 境界: 半径ちょうどは取れる、越えたら取れない
+    const inRange = spawnHeart([], 1, 0.5 + CATCH_RADIUS, 0);
+    const outRange = spawnHeart([], 2, 0.5 + CATCH_RADIUS + 0.01, 0);
+    const palm = { x: 0.5, y: 0 };
+    expect(judgeCatch(inRange, palm, 0).caught).toEqual([1]);
+    expect(judgeCatch(outRange, palm, 0).caught).toEqual([]);
+  });
+
+  it("つまみキャッチの半径は 0.10(パーと同じ。パーより狭くはしない)", () => {
+    expect(PINCH_CATCH_RADIUS).toBe(0.1);
+    // つまむジェスチャー自体が難しいので、パーより狭くしてはいけない
+    expect(PINCH_CATCH_RADIUS).toBeGreaterThanOrEqual(CATCH_RADIUS);
+    const hearts = spawnHeart([], 1, 0.5 + PINCH_CATCH_RADIUS, 0);
     const palm = { x: 0.5, y: 0 };
     expect(judgeCatch(hearts, palm, 0, PINCH_CATCH_RADIUS).caught).toEqual([1]);
+  });
+
+  it("palmCenter は中指MCP(9)を手首(0)方向へ 35% 寄せた点(付け根そのままだと高すぎる)", () => {
+    const landmarks: Point[] = Array.from({ length: 21 }, () => ({ x: 0, y: 0 }));
+    landmarks[0] = { x: 0.5, y: 1.0 }; // 手首(下)
+    landmarks[9] = { x: 0.5, y: 0.5 }; // 中指MCP(上)
+    const pc = palmCenter(landmarks);
+    expect(pc).not.toBeNull();
+    expect(pc!.x).toBeCloseTo(0.5);
+    expect(pc!.y).toBeCloseTo(0.5 + (1.0 - 0.5) * PALM_CENTER_LERP); // 9 より下(手首寄り)
+  });
+
+  it("palmCenter は 21 点未満なら null(検出ロスト対策)", () => {
+    expect(palmCenter([{ x: 0, y: 0 }])).toBeNull();
   });
 
   it("palm が null なら何もキャッチしない", () => {
