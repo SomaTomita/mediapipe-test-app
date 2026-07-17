@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Catch My Heart ♥</title>
+    <meta
+      name="description"
+      content="遠距離カップルのためのハート対戦ゲーム。指ハートで撃って、手のひらで受けとめて。ログイン不要。"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>❤️</text></svg>"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Yusei+Magic&family=Zen+Maru+Gothic:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- 手描きハートのシンボル定義 -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="sym-heart" viewBox="0 0 24 24">
+        <path
+          d="M12 20.5 C 4.5 14.5, 2.4 9, 5.8 5.9 C 8.2 3.8, 11 4.8, 12 7.2 C 13 4.8, 15.8 3.8, 18.2 5.9 C 21.6 9, 19.5 14.5, 12 20.5 Z"
+        />
+      </symbol>
+    </svg>
+
+    <!-- 紙の質感と水彩のにじみ -->
+    <div class="paper-grain" aria-hidden="true"></div>
+    <div class="wash wash-1" aria-hidden="true"></div>
+    <div class="wash wash-2" aria-hidden="true"></div>
+    <div class="wash wash-3" aria-hidden="true"></div>
+
+    <!-- 舞い上がるスケッチハート -->
+    <div class="bg-hearts" aria-hidden="true">
+      <span style="color: #c9452e"
+        ><svg><use href="#sym-heart" /></svg
+      ></span>
+      <span style="color: #5b7fa6"
+        ><svg><use href="#sym-heart" /></svg
+      ></span>
+      <span style="color: #e3b23c"
+        ><svg><use href="#sym-heart" /></svg
+      ></span>
+      <span style="color: #c9452e"
+        ><svg><use href="#sym-heart" /></svg
+      ></span>
+      <span style="color: #8a5a83"
+        ><svg><use href="#sym-heart" /></svg
+      ></span>
+      <span style="color: #c9452e"
+        ><svg><use href="#sym-heart" /></svg
+      ></span>
+      <span style="color: #8aa86f"
+        ><svg><use href="#sym-heart" /></svg
+      ></span>
+      <span style="color: #5b7fa6"
+        ><svg><use href="#sym-heart" /></svg
+      ></span>
+      <span style="color: #c9452e"
+        ><svg><use href="#sym-heart" /></svg
+      ></span>
+      <span style="color: #e3b23c"
+        ><svg><use href="#sym-heart" /></svg
+      ></span>
+    </div>
+
+    <main id="app">
+      <!-- トップ -->
+      <section id="screen-top" class="screen">
+        <p class="badge">遠距離ふたりのための、愛の対戦ゲーム</p>
+        <h1 class="title">
+          <span class="title-script">Catch My Heart</span>
+          <span class="title-jp">ハートを撃って、愛を受けとめて。</span>
+        </h1>
+        <p class="tagline">
+          指先でハートをつくれば、それが弾になる。<br />
+          受けとめきれなかったら――あなたの負け。
+        </p>
+
+        <div class="menu">
+          <button id="btn-host" class="btn btn-primary">
+            <svg class="btn-heart"><use href="#sym-heart" /></svg>
+            ルームを作る
+          </button>
+          <form id="form-join" class="join-row">
+            <input
+              id="input-room"
+              type="text"
+              inputmode="latin"
+              autocapitalize="characters"
+              maxlength="4"
+              placeholder="合言葉 4文字"
+              aria-label="合言葉(ルームコード)"
+            />
+            <button type="submit" class="btn btn-secondary">参加する</button>
+          </form>
+          <button id="btn-solo" class="btn btn-ghost">ひとりで練習</button>
+        </div>
+
+        <div class="howto">
+          <p class="howto-title">あそびかた</p>
+          <ul class="howto-list">
+            <li><span class="howto-icon">❤️</span>顔の横で指ハート、離すと発射(長押しでチャージ弾)</li>
+            <li><span class="howto-icon">✋</span>パーの手で、飛んでくるハートをキャッチ</li>
+            <li><span class="howto-icon">💚</span>つまんでキャッチできたら体力が回復</li>
+            <li><span class="howto-icon">🤟</span>アイラブユーサインで弾き返し(1回使うと10秒おやすみ)</li>
+          </ul>
+          <p class="howto-note">発射中はキャッチできない。体力が先に尽きたほうの負け(片手で遊べます)</p>
+        </div>
+
+        <p id="stats-line" class="stats-line"></p>
+      </section>
+
+      <!-- ロビー(ホスト待機) -->
+      <section id="screen-lobby" class="screen hidden">
+        <h2 class="subtitle">合言葉を届けよう</h2>
+        <div class="stamp">
+          <div class="stamp-inner">
+            <div class="room-code" id="room-code" aria-live="polite">····</div>
+            <span class="stamp-love">LOVE MAIL</span>
+          </div>
+          <div class="postmark postmark-stamp" aria-hidden="true">AIR<br />MAIL</div>
+        </div>
+        <button id="btn-copy" class="btn btn-primary">招待リンクをコピー</button>
+        <p class="hint">リンクを送って、相手が開いたら自動でつながります。</p>
+        <p class="waiting" id="lobby-status">相手を待っています<span class="dots"></span></p>
+        <button id="btn-lobby-back" class="btn btn-ghost">← もどる</button>
+      </section>
+
+      <!-- 対戦 / ソロ練習 -->
+      <section id="screen-battle" class="screen screen-battle hidden">
+        <div class="hud">
+          <div class="hud-side">
+            <span class="hud-label">あなた</span>
+            <div id="bar-mine" class="hp-bar"><div id="hp-mine" class="hp-fill"></div></div>
+            <span id="sub-mine" class="hud-sub"></span>
+          </div>
+          <div class="hud-center" id="hud-center">VS</div>
+          <div class="hud-side hud-right">
+            <span class="hud-label" id="hud-their-label">相手</span>
+            <div id="bar-theirs" class="hp-bar"><div id="hp-theirs" class="hp-fill"></div></div>
+            <span id="sub-theirs" class="hud-sub"></span>
+          </div>
+        </div>
+
+        <div class="stage">
+          <video id="remote-video" autoplay playsinline></video>
+          <canvas id="game-canvas"></canvas>
+          <video id="self-video" autoplay playsinline muted></video>
+          <div id="countdown" class="countdown hidden"></div>
+          <div id="charge-meter" class="charge-meter"><div id="charge-meter-fill"></div></div>
+          <div id="reflect-cd" class="reflect-cd" title="弾き返し(🤟)の回復">
+            <span class="reflect-cd-icon">🤟</span>
+            <span id="reflect-cd-num" class="reflect-cd-num"></span>
+          </div>
+        </div>
+
+        <p class="battle-help">
+          顔の横で<strong>指ハート、離すと発射</strong>(長押しでチャージ弾💛・発射中はキャッチ不可) / ✋
+          <strong>パーでキャッチ</strong><br />
+          <strong>つまんで取ると体力回復</strong>💚 / <strong>🤟 で弾き返し</strong>(10秒に1回)
+        </p>
+        <button id="btn-battle-exit" class="btn btn-ghost btn-small">対戦をやめる</button>
+      </section>
+
+      <!-- 結果 -->
+      <section id="screen-result" class="screen hidden">
+        <div class="burst" aria-hidden="true">
+          <span></span><span></span><span></span><span></span> <span></span><span></span><span></span><span></span>
+        </div>
+        <div id="result-emoji" class="result-emoji">💘</div>
+        <div class="postmark postmark-result" aria-hidden="true">CATCH<br />MY ♥</div>
+        <h2 id="result-title" class="result-title">愛が届いた!</h2>
+        <div id="prompt-card" class="prompt-card hidden">
+          <p class="prompt-label">まけた人への、愛のお題</p>
+          <p id="prompt-text" class="prompt-text"></p>
+        </div>
+        <div class="menu">
+          <button id="btn-rematch" class="btn btn-primary">もう一勝負</button>
+          <button id="btn-result-back" class="btn btn-ghost">← トップへ</button>
+        </div>
+        <p class="waiting hidden" id="rematch-status">相手の返事を待っています<span class="dots"></span></p>
+      </section>
+    </main>
+
+    <div id="loading" class="overlay hidden">
+      <svg class="loading-heart"><use href="#sym-heart" /></svg>
+      <p id="loading-text">準備しています…</p>
+    </div>
+    <div id="toast" class="toast hidden"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
