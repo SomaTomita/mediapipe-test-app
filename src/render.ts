@@ -33,7 +33,13 @@ export interface SkeletonHand {
   open: boolean; // 🫴 お皿の手(キャッチ可能)
 }
 
-const EFFECT_MS = 700;
+export const EFFECT_MS = 700; // その場エフェクト(catch / perfect / pop)
+export const RISE_MS = 1100; // 上昇エフェクト(fire / special / flick): 上端まで飛んでいく
+
+/** エフェクト種別ごとの寿命。上昇系は画面上端まで飛ぶため長め。 */
+export function effectDuration(kind: EffectKind): number {
+  return kind === "fire" || kind === "special" || kind === "flick" ? RISE_MS : EFFECT_MS;
+}
 
 // 色鉛筆スケッチ風のくすみパレット(style.css と揃える)
 const INK = "#3f3a35";
@@ -70,7 +76,7 @@ const HAND_BONES: ReadonlyArray<readonly [number, number]> = [
 const FINGER_TIPS = [4, 8, 12, 16, 20];
 
 export function pruneEffects(effects: Effect[], now: number): Effect[] {
-  return effects.filter((e) => now - e.bornAt < EFFECT_MS);
+  return effects.filter((e) => now - e.bornAt < effectDuration(e.kind));
 }
 
 /** 手描き風ハートのパスを作る(中心 x,y・サイズ s) */
@@ -220,7 +226,7 @@ export function drawFrame(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   for (const e of effects) {
-    const t = (now - e.bornAt) / EFFECT_MS; // 0..1
+    const t = (now - e.bornAt) / effectDuration(e.kind); // 0..1
     ctx.save();
     ctx.globalAlpha = 1 - t;
     const label = (text: string, color: string, dy: number) => {
@@ -245,16 +251,22 @@ export function drawFrame(
         ctx.fillText("💔", e.x * w, e.y * h);
         break;
       case "fire":
-        drawHeart(ctx, e.x * w, (e.y - t * 0.14) * h, base * 0.06, RED, -0.2 + t * 0.4);
-        break;
       case "special":
-        drawHeart(ctx, e.x * w, (e.y - t * 0.16) * h, base * 0.09, YELLOW, t * 0.8);
-        label("チャージ!", YELLOW, 0.09);
+      case "flick": {
+        // 相手画面へ飛んでいく感: 発生位置から画面上端まで上昇し、縮みながらフェード
+        const color = e.kind === "fire" ? RED : e.kind === "special" ? YELLOW : PURPLE;
+        const size = e.kind === "special" ? 0.085 : 0.065;
+        ctx.globalAlpha = t < 0.75 ? 1 : (1 - t) / 0.25;
+        const rx = (e.x + Math.sin(t * 7 + e.bornAt) * 0.02 * t) * w;
+        const ry = (e.y * (1 - t) - 0.06 * t) * h;
+        drawHeart(ctx, rx, ry, base * size * (1 - t * 0.35), color, Math.sin(t * 5) * 0.35);
+        if (t < 0.45) {
+          ctx.globalAlpha = 1 - t / 0.45;
+          if (e.kind === "special") label("チャージ!", YELLOW, 0.09);
+          if (e.kind === "flick") label("うちかえし!", PURPLE, -0.1);
+        }
         break;
-      case "flick":
-        drawHeart(ctx, e.x * w, (e.y - t * 0.1) * h, base * (0.06 + t * 0.05), PURPLE, t * 1.4);
-        label("うちかえし!", PURPLE, -0.1);
-        break;
+      }
     }
     ctx.restore();
   }
