@@ -26,6 +26,7 @@ import {
   canReflect,
   canOpenCatch,
   palmCenter,
+  isILoveYou,
   type Heart,
   type HeartKind,
   type Match,
@@ -271,7 +272,8 @@ function loop() {
   const pinchMidRaw = pinched && thumbTip && indexTip ? midpoint(thumbTip, indexTip) : null;
   if (pinchMidRaw) lastPinchMidRaw = pinchMidRaw;
   const open = hand ? isOpenHand(hand.landmarks) : false;
-  const reflecting = !!hand?.iloveyou;
+  // 分類(ILoveYou)が None に転んでも幾何判定でフォールバック
+  const reflecting = !!hand && (hand.iloveyou || isILoveYou(hand.landmarks));
 
   // カメラフレーム座標 → ステージ表示座標(ミラー + object-fit: cover の拡大トリミング補正)
   const toStage = (p: Point): Point =>

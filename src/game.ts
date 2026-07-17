@@ -149,6 +149,22 @@ export function isOpenHand(landmarks: Point[]): boolean {
 
 // ---- 🤟弾き返し ----
 
+export const FOLDED_FINGER_RATIO = 1.1; // 指先が手首から MCP の 1.1 倍未満なら「畳まれている」
+
+/**
+ * 🤟(ILoveYou)の幾何判定。GestureRecognizer の定型分類は
+ * トップ1が None に転ぶと反応しないため、フォールバックとして併用する。
+ * 人差し指+小指が伸び、中指+薬指が畳まれていれば🤟(親指は誤検出が多いため見ない)。
+ */
+export function isILoveYou(landmarks: Point[]): boolean {
+  if (landmarks.length < 21) return false;
+  const wrist = landmarks[0];
+  const dist = (i: number) => Math.hypot(landmarks[i].x - wrist.x, landmarks[i].y - wrist.y);
+  const extended = (mcp: number, tip: number) => dist(tip) > dist(mcp) * OPEN_HAND_RATIO;
+  const folded = (mcp: number, tip: number) => dist(tip) < dist(mcp) * FOLDED_FINGER_RATIO;
+  return extended(5, 8) && extended(17, 20) && folded(9, 12) && folded(13, 16);
+}
+
 export function canReflect(lastReflectAt: number, now: number): boolean {
   return now - lastReflectAt >= REFLECT_COOLDOWN_MS;
 }

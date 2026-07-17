@@ -30,6 +30,7 @@ import {
   canOpenCatch,
   palmCenter,
   PALM_CENTER_LERP,
+  isILoveYou,
   judgeReflect,
   createMatch,
   applyDamage,
@@ -202,6 +203,42 @@ describe("🫴 お皿の手(isOpenHand)", () => {
 
   it("ランドマークが揃っていなければ false", () => {
     expect(isOpenHand([])).toBe(false);
+  });
+});
+
+describe("🤟 幾何判定(isILoveYou)", () => {
+  // 手首(0)を基準に、指先の伸び具合で合成データを作る(tips順: 人差し指/中指/薬指/小指)
+  const buildHand = (tipDists: [number, number, number, number]): Point[] => {
+    const pts: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.9 }));
+    const mcps = [5, 9, 13, 17];
+    const tips = [8, 12, 16, 20];
+    mcps.forEach((i, k) => {
+      pts[i] = { x: 0.44 + k * 0.04, y: 0.8 };
+    });
+    tips.forEach((i, k) => {
+      pts[i] = { x: 0.44 + k * 0.04, y: 0.9 - tipDists[k] };
+    });
+    return pts;
+  };
+
+  it("人差し指+小指が伸び、中指+薬指が畳まれていれば🤟", () => {
+    expect(isILoveYou(buildHand([0.3, 0.08, 0.08, 0.3]))).toBe(true);
+  });
+
+  it("パー(全指伸び)は🤟ではない", () => {
+    expect(isILoveYou(buildHand([0.3, 0.3, 0.3, 0.3]))).toBe(false);
+  });
+
+  it("握りこぶしは🤟ではない", () => {
+    expect(isILoveYou(buildHand([0.08, 0.08, 0.08, 0.08]))).toBe(false);
+  });
+
+  it("中指が伸びていたら🤟ではない", () => {
+    expect(isILoveYou(buildHand([0.3, 0.3, 0.08, 0.3]))).toBe(false);
+  });
+
+  it("ランドマークが揃っていなければ false", () => {
+    expect(isILoveYou([])).toBe(false);
   });
 });
 
