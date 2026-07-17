@@ -1,6 +1,14 @@
 // Canvas 2D 描画(ナイーブアート調: フラットカラー+黒アウトライン)
 // 座標は表示空間の正規化値 (0..1) を受け取る
-import { type Heart, type Point, heartPosition } from "./game";
+import {
+  type Heart,
+  type Point,
+  heartPosition,
+  palmCenter,
+  CATCH_RADIUS,
+  PINCH_CATCH_RADIUS,
+  REFLECT_RADIUS,
+} from "./game";
 
 export type EffectKind =
   | "catch" // キャッチ成功
@@ -138,9 +146,10 @@ function drawSkeleton(
 
   // 状態リング: 判定点と同じ場所・同じ半径で描く(見た目=当たり判定)
   // 🤟=紫 / ✋パー=白(キャッチ可能) / ピンチ=赤(つまみキャッチ) / それ以外=薄いグレー
-  const ringR = base * 0.12; // CATCH_RADIUS / PINCH_CATCH_RADIUS と同スケール
-  const ringX = hand.pinched ? (px(4) + px(8)) / 2 : px(9);
-  const ringY = hand.pinched ? (py(4) + py(8)) / 2 : py(9);
+  const ringR = base * (hand.reflecting ? REFLECT_RADIUS : hand.pinched ? PINCH_CATCH_RADIUS : CATCH_RADIUS);
+  const pc = palmCenter(pts) ?? pts[9]; // 判定点(main.ts と同じ手のひら中心)
+  const ringX = hand.pinched ? (px(4) + px(8)) / 2 : pc.x * w;
+  const ringY = hand.pinched ? (py(4) + py(8)) / 2 : pc.y * h;
   ctx.beginPath();
   ctx.arc(ringX, ringY, ringR, 0, Math.PI * 2);
   if (hand.reflecting) {
@@ -167,9 +176,9 @@ function drawSkeleton(
     const my = (py(4) + py(8)) / 2;
     drawHeart(ctx, mx, my, base * 0.045, RED);
   }
-  // 🤟中は手のひらに紫ハート
+  // 🤟中は手のひら(判定点)に紫ハート
   if (hand.reflecting) {
-    drawHeart(ctx, px(9), py(9), base * 0.04, PURPLE);
+    drawHeart(ctx, pc.x * w, pc.y * h, base * 0.04, PURPLE);
   }
 }
 
