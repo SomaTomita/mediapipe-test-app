@@ -27,6 +27,7 @@ import {
   canOpenCatch,
   palmCenter,
   isILoveYou,
+  countdownLabel,
   type Heart,
   type HeartKind,
   type Match,
@@ -432,21 +433,20 @@ function beginCountdown() {
   showScreen("battle");
   startLoop();
   playing = false;
-  let n = 3;
+  const startedAt = performance.now();
   countdownEl.classList.remove("hidden");
-  countdownEl.textContent = String(n);
+  countdownEl.textContent = countdownLabel(0);
+  // 経過時間ベースで表示・開始を決める(メインスレッドが凍結しても開始タイミングがズレない)
   const timer = window.setInterval(() => {
-    n--;
-    if (n > 0) {
-      countdownEl.textContent = String(n);
-    } else if (n === 0) {
-      countdownEl.textContent = "♥";
+    const label = countdownLabel(performance.now() - startedAt);
+    if (label) {
+      countdownEl.textContent = label;
     } else {
       clearInterval(timer);
       countdownEl.classList.add("hidden");
       playing = true;
     }
-  }, 900);
+  }, 100);
 }
 
 function endMatch() {
@@ -502,6 +502,8 @@ function handleMsg(msg: Msg) {
       beginCountdown();
       break;
     case "heart":
+      // 開始前(カウントダウン中など)に届いたハートは破棄(開始直後の即被弾を防ぐ)
+      if (!playing) break;
       hearts = spawnHeart(hearts, msg.id, msg.x, performance.now(), msg.kind);
       break;
     case "catch":

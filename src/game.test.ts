@@ -31,6 +31,8 @@ import {
   palmCenter,
   PALM_CENTER_LERP,
   isILoveYou,
+  countdownLabel,
+  COUNTDOWN_STEP_MS,
   judgeReflect,
   createMatch,
   applyDamage,
@@ -303,6 +305,22 @@ describe("canOpenCatch(お皿キャッチの成立条件)", () => {
     // 回復したと勘違いして🤟を出すと、弾き返せない上にキャッチもできない
     expect(canOpenCatch(true, false, true)).toBe(false);
     expect(canOpenCatch(false, false, true)).toBe(false);
+  });
+});
+
+describe("countdownLabel(経過時間ベースのカウントダウン)", () => {
+  it("0.9秒刻みで 3 → 2 → 1 → ♥ → null(開始)と進む", () => {
+    expect(countdownLabel(0)).toBe("3");
+    expect(countdownLabel(COUNTDOWN_STEP_MS - 1)).toBe("3");
+    expect(countdownLabel(COUNTDOWN_STEP_MS)).toBe("2");
+    expect(countdownLabel(COUNTDOWN_STEP_MS * 2)).toBe("1");
+    expect(countdownLabel(COUNTDOWN_STEP_MS * 3)).toBe("♥");
+    expect(countdownLabel(COUNTDOWN_STEP_MS * 4)).toBeNull();
+  });
+
+  it("メインスレッドが凍結して時間が飛んでも、経過時間どおりの表示になる", () => {
+    // 固定インターバルの積み上げと違い、5秒飛んだら即開始扱い
+    expect(countdownLabel(5000)).toBeNull();
   });
 });
 
