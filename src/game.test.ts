@@ -46,6 +46,9 @@ import {
   FACING_STABLE_FRAMES,
   isHealPinch,
   isFingerHeart,
+  updateShoot,
+  type ShootHold,
+  type ShootInput,
   type Heart,
   type Point,
 } from "./game";
@@ -531,6 +534,53 @@ describe("isHealPinch(👌 手のひらピンチ=回復)/ isFingerHeart(🫰 手
     open[4] = { x: 0.3, y: 0.4 };
     open[8] = { x: 0.7, y: 0.4 };
     expect(isFingerHeart(open, "back")).toBe(false);
+  });
+});
+
+describe("updateShoot(🫰 発射ステートマシン)", () => {
+  const input = (o: Partial<ShootInput>): ShootInput => ({
+    fingerHeart: false,
+    pinched: false,
+    facing: "unknown",
+    handPresent: true,
+    ...o,
+  });
+  const held: ShootHold = { startedAt: 1000 };
+
+  it("指ハート開始で state が生まれる", () => {
+    const r = updateShoot(null, input({ fingerHeart: true, pinched: true, facing: "back" }), 1000);
+    expect(r).toEqual({ state: { startedAt: 1000 }, fireHeldMs: null });
+  });
+  it("指ハート維持中は state 据え置き・発射しない(startedAt を保存)", () => {
+    const r = updateShoot(held, input({ fingerHeart: true, pinched: true, facing: "back" }), 1500);
+    expect(r.state).toBe(held);
+    expect(r.fireHeldMs).toBeNull();
+  });
+  it("指を開いたら発射(fireHeldMs = 長押し時間)", () => {
+    const r = updateShoot(held, input({ fingerHeart: false, pinched: false, facing: "back" }), 1800);
+    expect(r).toEqual({ state: null, fireHeldMs: 800 });
+  });
+  it("手のひらへ持ち替えたらキャンセル(ピンチ維持のまま facing が palm)", () => {
+    const r = updateShoot(held, input({ fingerHeart: false, pinched: true, facing: "palm" }), 1800);
+    expect(r).toEqual({ state: null, fireHeldMs: null });
+  });
+  it("向き不定(unknown)でピンチ維持中は保持する(回転中の猶予)", () => {
+    const r = updateShoot(held, input({ fingerHeart: false, pinched: true, facing: "unknown" }), 1800);
+    expect(r.state).toBe(held);
+    expect(r.fireHeldMs).toBeNull();
+  });
+  it("facing が back のままピンチ維持も保持する", () => {
+    const r = updateShoot(held, input({ fingerHeart: true, pinched: true, facing: "back" }), 2000);
+    expect(r.state).toBe(held);
+    expect(r.fireHeldMs).toBeNull();
+  });
+  it("手を見失ったらキャンセル(発射しない)", () => {
+    const r = updateShoot(held, input({ handPresent: false }), 1800);
+    expect(r).toEqual({ state: null, fireHeldMs: null });
+  });
+  it("state が null で指ハートでなければ何も起きない", () => {
+    const r = updateShoot(null, input({ pinched: true, facing: "palm" }), 1800);
+    expect(r).toEqual({ state: null, fireHeldMs: null });
   });
 });
 

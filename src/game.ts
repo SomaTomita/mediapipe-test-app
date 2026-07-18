@@ -116,6 +116,36 @@ export function isFingerHeart(landmarks: Point[], facing: Facing): boolean {
   return facing === "back" && isPinched(landmarks[4], landmarks[8]);
 }
 
+export interface ShootHold {
+  startedAt: number;
+}
+
+export interface ShootInput {
+  fingerHeart: boolean;
+  pinched: boolean;
+  facing: Facing;
+  handPresent: boolean;
+}
+
+/**
+ * 🫰 発射ステートマシン。fireHeldMs !== null のフレームで発射する(値は長押し時間)。
+ * 発射は「指を物理的に開いた瞬間」のみ。手の甲ピンチのまま手首を返して👌回復に
+ * 持ち替えたとき(ピンチ維持で facing が palm へ)は、指を開いていないのに発射扱いに
+ * なる誤爆を防ぐため、発射せずにキャンセルする。向き不定(unknown)は回転途中の
+ * 猶予として保持し、手を見失ったフレームでは発射しない。
+ */
+export function updateShoot(
+  state: ShootHold | null,
+  input: ShootInput,
+  now: number,
+): { state: ShootHold | null; fireHeldMs: number | null } {
+  if (!input.handPresent) return { state: null, fireHeldMs: null };
+  if (state && !input.pinched) return { state: null, fireHeldMs: now - state.startedAt };
+  if (state && input.facing === "palm") return { state: null, fireHeldMs: null };
+  if (input.fingerHeart && !state) return { state: { startedAt: now }, fireHeldMs: null };
+  return { state, fireHeldMs: null };
+}
+
 // ---- 手の向き(手のひら / 手の甲)----
 
 export type Facing = "palm" | "back" | "unknown";
