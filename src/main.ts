@@ -28,6 +28,12 @@ import {
   palmCenter,
   isILoveYou,
   countdownLabel,
+  handFacing,
+  updateFacing,
+  initFacingState,
+  isHealPinch,
+  type Facing,
+  type FacingState,
   type Heart,
   type HeartKind,
   type Match,
@@ -90,6 +96,9 @@ let theirRematch = false;
 
 // 指先系の状態(片手プレイ前提)
 let pinchState: { startedAt: number; nearFace: boolean } | null = null;
+// 現実側の手の向き符号校正。手動E2Eで反転していたら true にする(docs/plans 参照)
+const FACING_INVERT = false;
+let facingState: FacingState = initFacingState();
 let lastPinchMidRaw: Point | null = null;
 let lastShotAt = -Infinity;
 let lastSpecialAt = -Infinity;
@@ -273,6 +282,9 @@ function loop() {
   const pinchMidRaw = pinched && thumbTip && indexTip ? midpoint(thumbTip, indexTip) : null;
   if (pinchMidRaw) lastPinchMidRaw = pinchMidRaw;
   const open = hand ? isOpenHand(hand.landmarks) : false;
+  const facingSample: Facing = hand ? handFacing(hand.landmarks, hand.isRight, FACING_INVERT) : "unknown";
+  facingState = updateFacing(facingState, facingSample);
+  const facing = facingState.current;
   // 分類(ILoveYou)が None に転んでも幾何判定でフォールバック
   const reflecting = !!hand && (hand.iloveyou || isILoveYou(hand.landmarks));
 
@@ -322,9 +334,11 @@ function loop() {
       }
     }
 
-    // キャッチ: 顔から離れたピンチ=つまみキャッチ(回復)、🫴お皿の手=通常キャッチ
+    // キャッチ: 👌手のひらピンチ=つまみキャッチ(回復)、🫴お皿の手=通常キャッチ
     // (🤟中はクールダウン中でもキャッチ不可 → canOpenCatch の意図コメント参照)
-    const pinchCatching = pinched && pinchState !== null && !pinchState.nearFace;
+    // 回復: 👌 手のひらを見せたピンチ(顔の近さは問わない)
+    // TODO(#47): 旧 nearFace 発射経路が残る間だけ、同一ピンチの回復+発射の二重取りを防ぐ暫定ガード
+    const pinchCatching = isHealPinch(hand?.landmarks ?? [], facing) && !pinchState?.nearFace;
     if (pinchCatching || canOpenCatch(open, pinched, reflecting)) {
       const catchPoint = pinchCatching ? pinchDisp : palmDisp;
       const radius = pinchCatching ? PINCH_CATCH_RADIUS : CATCH_RADIUS;
@@ -416,6 +430,7 @@ function resetBattleState() {
   hearts = [];
   effects = [];
   pinchState = null;
+  facingState = initFacingState();
   lastPinchMidRaw = null;
   lastShotAt = -Infinity;
   lastSpecialAt = -Infinity;
