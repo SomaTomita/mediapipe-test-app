@@ -116,6 +116,23 @@ export function isFingerHeart(landmarks: Point[], facing: Facing): boolean {
   return facing === "back" && isPinched(landmarks[4], landmarks[8]);
 }
 
+// 人差し指の軸に対する親指先の符号側。指ハート(クロス)確証に使う任意判定。
+export const THUMB_CROSS_MARGIN = 0.005;
+
+/**
+ * 親指先(4)が人差し指の軸(PIP6→TIP8)を越えて反対側へ回り込んでいるか。
+ * 👌 は親指が軸の手前でループを作り、🫰 指ハートは軸を越えてクロスする。
+ * 主判定(facing)の追加確証として使う。
+ */
+export function isThumbIndexCrossed(landmarks: Point[]): boolean {
+  if (landmarks.length < 21) return false;
+  const pip = landmarks[6];
+  const tip = landmarks[8];
+  const thumb = landmarks[4];
+  const cross = (tip.x - pip.x) * (thumb.y - pip.y) - (tip.y - pip.y) * (thumb.x - pip.x);
+  return cross > THUMB_CROSS_MARGIN;
+}
+
 export interface ShootHold {
   startedAt: number;
 }
