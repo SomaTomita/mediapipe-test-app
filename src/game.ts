@@ -104,6 +104,53 @@ export function resolveShot(heldMs: number, now: number, lastShotAt: number, las
   return "normal";
 }
 
+// ---- 手の向き(手のひら / 手の甲)----
+
+export type Facing = "palm" | "back" | "unknown";
+// 手首0・人差し指MCP5・小指MCP17 の 2D 外積の大きさがこれ未満なら向き不定(手が端を向く)
+export const FACING_DEADZONE = 0.002;
+
+/**
+ * カメラに対して手のひらが向いているか手の甲が向いているかを判定する。
+ * 手首(0)→人差し指MCP(5) と 手首(0)→小指MCP(17) の 2D 外積の符号で決める。
+ * 外積の符号は左右の手で反転するため isRightHand で補正する。
+ * MediaPipe handedness と現実の符号が反転する場合は invert=true(手動校正で確定)。
+ * 座標は非ミラー生値(y下向き)前提。
+ */
+export function handFacing(landmarks: Point[], isRightHand: boolean, invert = false): Facing {
+  if (landmarks.length < 21) return "unknown";
+  const w = landmarks[0];
+  const idx = landmarks[5];
+  const pky = landmarks[17];
+  const cross = (idx.x - w.x) * (pky.y - w.y) - (idx.y - w.y) * (pky.x - w.x);
+  if (Math.abs(cross) < FACING_DEADZONE) return "unknown";
+  let palm = cross > 0; // 右手・この座標系での規約(現実側は invert で校正)
+  if (!isRightHand) palm = !palm;
+  if (invert) palm = !palm;
+  return palm ? "palm" : "back";
+}
+
+export const FACING_STABLE_FRAMES = 4; // これだけ連続一致したら向きを確定
+
+export interface FacingState {
+  current: Facing;
+  candidate: Facing;
+  count: number;
+}
+
+export function initFacingState(): FacingState {
+  return { current: "unknown", candidate: "unknown", count: 0 };
+}
+
+/** 向きサンプルをヒステリシスで安定化する。unknown は無視して直前を保持。 */
+export function updateFacing(state: FacingState, sample: Facing): FacingState {
+  if (sample === "unknown") return state;
+  if (sample === state.current) return { ...state, candidate: sample, count: 0 };
+  const count = sample === state.candidate ? state.count + 1 : 1;
+  if (count >= FACING_STABLE_FRAMES) return { current: sample, candidate: sample, count: 0 };
+  return { ...state, candidate: sample, count };
+}
+
 // ---- 手のひら中心 ----
 
 export const PALM_CENTER_LERP = 0.35; // 中指MCP(9)から手首(0)へ寄せる割合

@@ -39,6 +39,11 @@ import {
   healHp,
   onOpponentLife,
   pickPrompt,
+  handFacing,
+  FACING_DEADZONE,
+  updateFacing,
+  initFacingState,
+  FACING_STABLE_FRAMES,
   type Heart,
   type Point,
 } from "./game";
@@ -402,6 +407,80 @@ describe("coverMap(object-fit: cover の座標補正)", () => {
   it("映像サイズが未確定(0)のときはそのまま返す", () => {
     const p = coverMap({ x: 0.4, y: 0.6 }, 0, 0, 300, 400);
     expect(p).toEqual({ x: 0.4, y: 0.6 });
+  });
+});
+
+describe("handFacing(手のひら/手の甲の向き判定)", () => {
+  // 非ミラー生座標(y下向き)。手首0・人差し指MCP5・小指MCP17 の 2D 外積で判定。
+  // 右手・手のひら向きの合成データ(この座標系での符号規約をテストで固定する)
+  const palmRight = (): Point[] => {
+    const pts: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.9 }));
+    pts[0] = { x: 0.5, y: 0.9 }; // 手首
+    pts[5] = { x: 0.42, y: 0.55 }; // 人差し指MCP
+    pts[17] = { x: 0.6, y: 0.58 }; // 小指MCP
+    return pts;
+  };
+  // 手の甲向きは左右(人差し指MCPと小指MCPのx)が入れ替わる
+  const backRight = (): Point[] => {
+    const pts = palmRight();
+    pts[5] = { x: 0.6, y: 0.55 };
+    pts[17] = { x: 0.42, y: 0.58 };
+    return pts;
+  };
+
+  it("右手・手のひら向きは palm", () => {
+    expect(handFacing(palmRight(), true)).toBe("palm");
+  });
+  it("右手・手の甲向きは back", () => {
+    expect(handFacing(backRight(), true)).toBe("back");
+  });
+  it("左手は右手と符号が反転する(同じ座標なら palm→back)", () => {
+    expect(handFacing(palmRight(), false)).toBe("back");
+  });
+  it("invert=true で最終判定が反転する(現実側の符号校正用)", () => {
+    expect(handFacing(palmRight(), true, true)).toBe("back");
+  });
+  it("外積がデッドゾーン未満(手が端を向く)なら unknown", () => {
+    expect(FACING_DEADZONE).toBeGreaterThan(0);
+    const flat: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.9 }));
+    flat[0] = { x: 0.5, y: 0.9 };
+    flat[5] = { x: 0.5, y: 0.6 };
+    flat[17] = { x: 0.5, y: 0.62 }; // 手首と一直線 → 外積≒0
+    expect(handFacing(flat, true)).toBe("unknown");
+  });
+  it("ランドマークが揃っていなければ unknown", () => {
+    expect(handFacing([], true)).toBe("unknown");
+  });
+});
+
+describe("updateFacing(向きのヒステリシス安定化)", () => {
+  it("初期状態は unknown", () => {
+    expect(initFacingState().current).toBe("unknown");
+  });
+  it("連続 FACING_STABLE_FRAMES フレーム一致で初めて確定する", () => {
+    let s = initFacingState();
+    for (let i = 0; i < FACING_STABLE_FRAMES - 1; i++) s = updateFacing(s, "palm");
+    expect(s.current).toBe("unknown"); // まだ確定しない
+    s = updateFacing(s, "palm");
+    expect(s.current).toBe("palm"); // ここで確定
+  });
+  it("単発の逆サンプルでは反転しない(ノイズ耐性)", () => {
+    let s = initFacingState();
+    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "palm");
+    s = updateFacing(s, "back"); // 1フレームだけ back
+    expect(s.current).toBe("palm");
+  });
+  it("unknown サンプルは無視して直前状態を保持する", () => {
+    let s = initFacingState();
+    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "palm");
+    s = updateFacing(s, "unknown");
+    expect(s.current).toBe("palm");
+  });
+  it("連続一致すれば正しく切り替わる", () => {
+    let s = initFacingState();
+    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "palm");
+    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "back");
+    expect(s.current).toBe("back");
   });
 });
 
