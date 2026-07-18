@@ -47,6 +47,7 @@ import {
   isHealPinch,
   isFingerHeart,
   updateShoot,
+  isThumbIndexCrossed,
   type ShootHold,
   type ShootInput,
   type Heart,
@@ -581,6 +582,29 @@ describe("updateShoot(🫰 発射ステートマシン)", () => {
   it("state が null で指ハートでなければ何も起きない", () => {
     const r = updateShoot(null, input({ pinched: true, facing: "palm" }), 1800);
     expect(r).toEqual({ state: null, fireHeldMs: null });
+  });
+});
+
+describe("isThumbIndexCrossed(指ハートのクロス確証)", () => {
+  // 人差し指の軸(PIP6→TIP8)に対する親指先(4)の符号側で判定する
+  const base = (): Point[] => {
+    const pts: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.5 }));
+    pts[6] = { x: 0.5, y: 0.6 }; // 人差し指PIP
+    pts[8] = { x: 0.5, y: 0.4 }; // 人差し指TIP(上向き)
+    return pts;
+  };
+  it("親指先が人差し指軸を越えて反対側にあればクロス", () => {
+    const pts = base();
+    pts[4] = { x: 0.56, y: 0.45 }; // 軸の右側へ回り込む
+    expect(isThumbIndexCrossed(pts)).toBe(true);
+  });
+  it("親指先が軸の手前側(通常の👌ループ)ならクロスではない", () => {
+    const pts = base();
+    pts[4] = { x: 0.44, y: 0.45 };
+    expect(isThumbIndexCrossed(pts)).toBe(false);
+  });
+  it("ランドマークが揃っていなければ false", () => {
+    expect(isThumbIndexCrossed([])).toBe(false);
   });
 });
 
