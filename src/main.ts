@@ -399,6 +399,7 @@ function loop() {
           pinched,
           reflecting,
           open,
+          facing,
         },
       ]
     : [];

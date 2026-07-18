@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { pruneEffects, effectDuration, EFFECT_MS, RISE_MS, type Effect, type EffectKind } from "./render";
+import {
+  pruneEffects,
+  effectDuration,
+  ringKind,
+  EFFECT_MS,
+  RISE_MS,
+  type Effect,
+  type EffectKind,
+  type SkeletonHand,
+} from "./render";
 
 const eff = (bornAt: number, kind: EffectKind = "catch"): Effect => ({ kind, x: 0.5, y: 0.5, bornAt });
 
@@ -39,5 +48,31 @@ describe("pruneEffects", () => {
     for (const kind of ["catch", "perfect", "pop"] as const) {
       expect(effectDuration(kind)).toBe(EFFECT_MS);
     }
+  });
+});
+
+describe("ringKind(手の状態→リング種別)", () => {
+  const hand = (o: Partial<SkeletonHand>): SkeletonHand => ({
+    points: [],
+    pinched: false,
+    reflecting: false,
+    open: false,
+    facing: "unknown",
+    ...o,
+  });
+  it("🤟中は reflect が最優先", () => {
+    expect(ringKind(hand({ reflecting: true, pinched: true }))).toBe("reflect");
+  });
+  it("手のひらピンチは heal", () => {
+    expect(ringKind(hand({ pinched: true, facing: "palm" }))).toBe("heal");
+  });
+  it("手の甲ピンチは shoot", () => {
+    expect(ringKind(hand({ pinched: true, facing: "back" }))).toBe("shoot");
+  });
+  it("パーは catch", () => {
+    expect(ringKind(hand({ open: true }))).toBe("catch");
+  });
+  it("該当なしは idle", () => {
+    expect(ringKind(hand({}))).toBe("idle");
   });
 });
