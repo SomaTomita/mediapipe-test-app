@@ -39,6 +39,8 @@ import {
   healHp,
   onOpponentLife,
   pickPrompt,
+  handFacing,
+  FACING_DEADZONE,
   type Heart,
   type Point,
 } from "./game";
@@ -402,6 +404,49 @@ describe("coverMap(object-fit: cover の座標補正)", () => {
   it("映像サイズが未確定(0)のときはそのまま返す", () => {
     const p = coverMap({ x: 0.4, y: 0.6 }, 0, 0, 300, 400);
     expect(p).toEqual({ x: 0.4, y: 0.6 });
+  });
+});
+
+describe("handFacing(手のひら/手の甲の向き判定)", () => {
+  // 非ミラー生座標(y下向き)。手首0・人差し指MCP5・小指MCP17 の 2D 外積で判定。
+  // 右手・手のひら向きの合成データ(この座標系での符号規約をテストで固定する)
+  const palmRight = (): Point[] => {
+    const pts: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.9 }));
+    pts[0] = { x: 0.5, y: 0.9 }; // 手首
+    pts[5] = { x: 0.42, y: 0.55 }; // 人差し指MCP
+    pts[17] = { x: 0.6, y: 0.58 }; // 小指MCP
+    return pts;
+  };
+  // 手の甲向きは左右(人差し指MCPと小指MCPのx)が入れ替わる
+  const backRight = (): Point[] => {
+    const pts = palmRight();
+    pts[5] = { x: 0.6, y: 0.55 };
+    pts[17] = { x: 0.42, y: 0.58 };
+    return pts;
+  };
+
+  it("右手・手のひら向きは palm", () => {
+    expect(handFacing(palmRight(), true)).toBe("palm");
+  });
+  it("右手・手の甲向きは back", () => {
+    expect(handFacing(backRight(), true)).toBe("back");
+  });
+  it("左手は右手と符号が反転する(同じ座標なら palm→back)", () => {
+    expect(handFacing(palmRight(), false)).toBe("back");
+  });
+  it("invert=true で最終判定が反転する(現実側の符号校正用)", () => {
+    expect(handFacing(palmRight(), true, true)).toBe("back");
+  });
+  it("外積がデッドゾーン未満(手が端を向く)なら unknown", () => {
+    expect(FACING_DEADZONE).toBeGreaterThan(0);
+    const flat: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.9 }));
+    flat[0] = { x: 0.5, y: 0.9 };
+    flat[5] = { x: 0.5, y: 0.6 };
+    flat[17] = { x: 0.5, y: 0.62 }; // 手首と一直線 → 外積≒0
+    expect(handFacing(flat, true)).toBe("unknown");
+  });
+  it("ランドマークが揃っていなければ unknown", () => {
+    expect(handFacing([], true)).toBe("unknown");
   });
 });
 
