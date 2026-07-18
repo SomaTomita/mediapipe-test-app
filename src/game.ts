@@ -130,6 +130,27 @@ export function handFacing(landmarks: Point[], isRightHand: boolean, invert = fa
   return palm ? "palm" : "back";
 }
 
+export const FACING_STABLE_FRAMES = 4; // これだけ連続一致したら向きを確定
+
+export interface FacingState {
+  current: Facing;
+  candidate: Facing;
+  count: number;
+}
+
+export function initFacingState(): FacingState {
+  return { current: "unknown", candidate: "unknown", count: 0 };
+}
+
+/** 向きサンプルをヒステリシスで安定化する。unknown は無視して直前を保持。 */
+export function updateFacing(state: FacingState, sample: Facing): FacingState {
+  if (sample === "unknown") return state;
+  if (sample === state.current) return { ...state, candidate: sample, count: 0 };
+  const count = sample === state.candidate ? state.count + 1 : 1;
+  if (count >= FACING_STABLE_FRAMES) return { current: sample, candidate: sample, count: 0 };
+  return { ...state, candidate: sample, count };
+}
+
 // ---- 手のひら中心 ----
 
 export const PALM_CENTER_LERP = 0.35; // 中指MCP(9)から手首(0)へ寄せる割合

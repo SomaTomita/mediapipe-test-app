@@ -41,6 +41,9 @@ import {
   pickPrompt,
   handFacing,
   FACING_DEADZONE,
+  updateFacing,
+  initFacingState,
+  FACING_STABLE_FRAMES,
   type Heart,
   type Point,
 } from "./game";
@@ -447,6 +450,37 @@ describe("handFacing(手のひら/手の甲の向き判定)", () => {
   });
   it("ランドマークが揃っていなければ unknown", () => {
     expect(handFacing([], true)).toBe("unknown");
+  });
+});
+
+describe("updateFacing(向きのヒステリシス安定化)", () => {
+  it("初期状態は unknown", () => {
+    expect(initFacingState().current).toBe("unknown");
+  });
+  it("連続 FACING_STABLE_FRAMES フレーム一致で初めて確定する", () => {
+    let s = initFacingState();
+    for (let i = 0; i < FACING_STABLE_FRAMES - 1; i++) s = updateFacing(s, "palm");
+    expect(s.current).toBe("unknown"); // まだ確定しない
+    s = updateFacing(s, "palm");
+    expect(s.current).toBe("palm"); // ここで確定
+  });
+  it("単発の逆サンプルでは反転しない(ノイズ耐性)", () => {
+    let s = initFacingState();
+    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "palm");
+    s = updateFacing(s, "back"); // 1フレームだけ back
+    expect(s.current).toBe("palm");
+  });
+  it("unknown サンプルは無視して直前状態を保持する", () => {
+    let s = initFacingState();
+    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "palm");
+    s = updateFacing(s, "unknown");
+    expect(s.current).toBe("palm");
+  });
+  it("連続一致すれば正しく切り替わる", () => {
+    let s = initFacingState();
+    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "palm");
+    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "back");
+    expect(s.current).toBe("back");
   });
 });
 
