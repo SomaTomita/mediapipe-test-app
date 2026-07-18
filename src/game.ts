@@ -104,6 +104,18 @@ export function resolveShot(heldMs: number, now: number, lastShotAt: number, las
   return "normal";
 }
 
+/** 👌 手のひらを見せたピンチ = 回復(つまみキャッチ)。発射はしない。 */
+export function isHealPinch(landmarks: Point[], facing: Facing): boolean {
+  if (landmarks.length < 21) return false;
+  return facing === "palm" && isPinched(landmarks[4], landmarks[8]);
+}
+
+/** 🫰 手の甲を見せた指ハート(ピンチ) = 発射。 */
+export function isFingerHeart(landmarks: Point[], facing: Facing): boolean {
+  if (landmarks.length < 21) return false;
+  return facing === "back" && isPinched(landmarks[4], landmarks[8]);
+}
+
 // ---- 手の向き(手のひら / 手の甲)----
 
 export type Facing = "palm" | "back" | "unknown";

@@ -44,6 +44,8 @@ import {
   updateFacing,
   initFacingState,
   FACING_STABLE_FRAMES,
+  isHealPinch,
+  isFingerHeart,
   type Heart,
   type Point,
 } from "./game";
@@ -481,6 +483,54 @@ describe("updateFacing(向きのヒステリシス安定化)", () => {
     for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "palm");
     for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "back");
     expect(s.current).toBe("back");
+  });
+});
+
+describe("isHealPinch(👌 手のひらピンチ=回復)/ isFingerHeart(🫰 手の甲ピンチ=発射)", () => {
+  const pinchHand = (facingPts: Point[]): Point[] => {
+    const pts = [...facingPts];
+    pts[4] = { x: 0.5, y: 0.5 }; // 親指先
+    pts[8] = { x: 0.5 + PINCH_THRESHOLD - 0.001, y: 0.5 }; // 人差し指先(ピンチ距離内)
+    return pts;
+  };
+  const palm = (): Point[] => {
+    const pts: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.9 }));
+    pts[0] = { x: 0.5, y: 0.9 };
+    pts[5] = { x: 0.42, y: 0.55 };
+    pts[17] = { x: 0.6, y: 0.58 };
+    return pts;
+  };
+
+  it("手のひら向き + ピンチなら回復ピンチ", () => {
+    expect(isHealPinch(pinchHand(palm()), "palm")).toBe(true);
+  });
+  it("手の甲向きのピンチは回復ではない(発射側)", () => {
+    expect(isHealPinch(pinchHand(palm()), "back")).toBe(false);
+  });
+  it("向き不定なら回復ではない", () => {
+    expect(isHealPinch(pinchHand(palm()), "unknown")).toBe(false);
+  });
+  it("ピンチしていなければ回復ではない", () => {
+    const open = palm();
+    open[4] = { x: 0.3, y: 0.4 };
+    open[8] = { x: 0.7, y: 0.4 };
+    expect(isHealPinch(open, "palm")).toBe(false);
+  });
+
+  it("手の甲向き + ピンチなら指ハート(発射)", () => {
+    expect(isFingerHeart(pinchHand(palm()), "back")).toBe(true);
+  });
+  it("手のひら向きのピンチは指ハートではない(回復側)", () => {
+    expect(isFingerHeart(pinchHand(palm()), "palm")).toBe(false);
+  });
+  it("向き不定なら指ハートではない", () => {
+    expect(isFingerHeart(pinchHand(palm()), "unknown")).toBe(false);
+  });
+  it("ピンチしていなければ指ハートではない", () => {
+    const open = palm();
+    open[4] = { x: 0.3, y: 0.4 };
+    open[8] = { x: 0.7, y: 0.4 };
+    expect(isFingerHeart(open, "back")).toBe(false);
   });
 });
 
