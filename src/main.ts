@@ -5,7 +5,6 @@ import {
   PINCH_CATCH_RADIUS,
   HEAL_PERFECT,
   SPECIAL_HOLD_MS,
-  SPECIAL_NEAR_FACE_DIST,
   REFLECT_COOLDOWN_MS,
   resolveShot,
   spawnHeart,
@@ -32,6 +31,9 @@ import {
   updateFacing,
   initFacingState,
   isHealPinch,
+  isFingerHeart,
+  updateShoot,
+  type ShootHold,
   type Facing,
   type FacingState,
   type Heart,
@@ -94,8 +96,8 @@ let loopRunning = false;
 let myRematch = false;
 let theirRematch = false;
 
-// 指先系の状態(片手プレイ前提)
-let pinchState: { startedAt: number; nearFace: boolean } | null = null;
+// 指先系の状態(片手プレイ前提)。発射用の指ハート状態
+let shootState: ShootHold | null = null;
 // 現実側の手の向き符号校正。手動E2Eで反転していたら true にする(docs/plans 参照)
 const FACING_INVERT = false;
 let facingState: FacingState = initFacingState();
@@ -285,6 +287,8 @@ function loop() {
   const facingSample: Facing = hand ? handFacing(hand.landmarks, hand.isRight, FACING_INVERT) : "unknown";
   facingState = updateFacing(facingState, facingSample);
   const facing = facingState.current;
+  // 🫰 指ハート: 手の甲を見せたピンチ(発射トリガ)
+  const fingerHeart = isFingerHeart(hand?.landmarks ?? [], facing);
   // 分類(ILoveYou)が None に転んでも幾何判定でフォールバック
   const reflecting = !!hand && (hand.iloveyou || isILoveYou(hand.landmarks));
 
@@ -301,23 +305,13 @@ function loop() {
   const pinchDisp = pinchMidRaw ? toStage(pinchMidRaw) : null;
 
   if (playing) {
-    // 指ハート: ピンチ開始(顔の近くなら発射モード)
-    if (pinched && !pinchState) {
-      const nearFace =
-        !!det.nose &&
-        !!pinchMidRaw &&
-        Math.hypot(pinchMidRaw.x - det.nose.x, pinchMidRaw.y - det.nose.y) < SPECIAL_NEAR_FACE_DIST;
-      pinchState = { startedAt: now, nearFace };
+    // 🫰 指ハート発射: 手の甲ピンチで蓄積、指を開いた瞬間に発射。👌へ持ち替えたらキャンセル
+    const shot = updateShoot(shootState, { fingerHeart, pinched, facing, handPresent: !!hand }, now);
+    shootState = shot.state;
+    if (shot.fireHeldMs !== null && lastPinchMidRaw) {
+      const kind = resolveShot(shot.fireHeldMs, now, lastShotAt, lastSpecialAt);
+      if (kind) fireHearts(kind, lastPinchMidRaw.x, toStage(lastPinchMidRaw).x, now);
     }
-    // ピンチを離した瞬間に発射(長押しでチャージ弾)。手を見失ったときは発射しない
-    if (pinchState && hand && !pinched) {
-      if (pinchState.nearFace && lastPinchMidRaw) {
-        const kind = resolveShot(now - pinchState.startedAt, now, lastShotAt, lastSpecialAt);
-        if (kind) fireHearts(kind, lastPinchMidRaw.x, toStage(lastPinchMidRaw).x, now);
-      }
-      pinchState = null;
-    }
-    if (!hand) pinchState = null;
 
     // 🤟 弾き返し: サインを出した手に触れたハートを相手に返す
     const reflectReady = canReflect(lastReflectAt, now);
@@ -337,8 +331,7 @@ function loop() {
     // キャッチ: 👌手のひらピンチ=つまみキャッチ(回復)、🫴お皿の手=通常キャッチ
     // (🤟中はクールダウン中でもキャッチ不可 → canOpenCatch の意図コメント参照)
     // 回復: 👌 手のひらを見せたピンチ(顔の近さは問わない)
-    // TODO(#47): 旧 nearFace 発射経路が残る間だけ、同一ピンチの回復+発射の二重取りを防ぐ暫定ガード
-    const pinchCatching = isHealPinch(hand?.landmarks ?? [], facing) && !pinchState?.nearFace;
+    const pinchCatching = isHealPinch(hand?.landmarks ?? [], facing);
     if (pinchCatching || canOpenCatch(open, pinched, reflecting)) {
       const catchPoint = pinchCatching ? pinchDisp : palmDisp;
       const radius = pinchCatching ? PINCH_CATCH_RADIUS : CATCH_RADIUS;
@@ -380,13 +373,13 @@ function loop() {
       const kind: HeartKind | undefined = r < 0.15 ? "special" : r < 0.3 ? "flick" : undefined;
       hearts = spawnHeart(hearts, soloHeartId, 0.1 + Math.random() * 0.8, now, kind);
     }
-  } else if (!pinched) {
-    pinchState = null;
+  } else if (!fingerHeart) {
+    shootState = null;
   }
 
   // 左下メーター: チャージ弾の長押し進捗
-  const charging = pinched && pinchState?.nearFace;
-  meterFill.style.height = charging ? `${Math.min(1, (now - pinchState!.startedAt) / SPECIAL_HOLD_MS) * 100}%` : "0%";
+  const charging = !!shootState;
+  meterFill.style.height = charging ? `${Math.min(1, (now - shootState!.startedAt) / SPECIAL_HOLD_MS) * 100}%` : "0%";
 
   // 🤟弾き返しのクールダウン: 残り秒数をカウントダウン表示
   const reflectRemainMs = REFLECT_COOLDOWN_MS - (now - lastReflectAt);
@@ -429,7 +422,7 @@ function resetBattleState() {
   match = createMatch();
   hearts = [];
   effects = [];
-  pinchState = null;
+  shootState = null;
   facingState = initFacingState();
   lastPinchMidRaw = null;
   lastShotAt = -Infinity;
