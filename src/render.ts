@@ -3,6 +3,7 @@
 import {
   type Heart,
   type Point,
+  type Facing,
   heartPosition,
   palmCenter,
   CATCH_RADIUS,
@@ -31,6 +32,19 @@ export interface SkeletonHand {
   pinched: boolean;
   reflecting: boolean; // 🤟中
   open: boolean; // 🫴 お皿の手(キャッチ可能)
+  facing: Facing; // 手のひら/手の甲の向き(回復/発射ピンチの区別に使う)
+}
+
+/** リングの表示種別。手の状態(reflecting/pinched+facing/open)から一意に決まる。 */
+export type RingKind = "reflect" | "heal" | "shoot" | "catch" | "idle";
+
+/** 手の状態から状態リングの種別を判定する(優先順位: reflect > heal > shoot > catch > idle)。 */
+export function ringKind(hand: SkeletonHand): RingKind {
+  if (hand.reflecting) return "reflect";
+  if (hand.pinched && hand.facing === "palm") return "heal";
+  if (hand.pinched && hand.facing === "back") return "shoot";
+  if (hand.open) return "catch";
+  return "idle";
 }
 
 export const EFFECT_MS = 700; // その場エフェクト(catch / perfect / pop)
@@ -151,39 +165,49 @@ function drawSkeleton(
   }
 
   // 状態リング: 判定点と同じ場所・同じ半径で描く(見た目=当たり判定)
-  // 🤟=紫 / ✋パー=白(キャッチ可能) / ピンチ=赤(つまみキャッチ) / それ以外=薄いグレー
-  const ringR = base * (hand.reflecting ? REFLECT_RADIUS : hand.pinched ? PINCH_CATCH_RADIUS : CATCH_RADIUS);
+  // 🤟=紫 / 👌手のひらピンチ=回復(赤系) / 🫰手の甲ピンチ=発射(黄色系) / ✋パー=白(キャッチ可能) / それ以外=薄いグレー
+  const kind = ringKind(hand);
+  const isPinchRing = kind === "heal" || kind === "shoot";
+  const ringR = base * (kind === "reflect" ? REFLECT_RADIUS : isPinchRing ? PINCH_CATCH_RADIUS : CATCH_RADIUS);
   const pc = palmCenter(pts) ?? pts[9]; // 判定点(main.ts と同じ手のひら中心)
-  const ringX = hand.pinched ? (px(4) + px(8)) / 2 : pc.x * w;
-  const ringY = hand.pinched ? (py(4) + py(8)) / 2 : pc.y * h;
+  const ringX = isPinchRing ? (px(4) + px(8)) / 2 : pc.x * w;
+  const ringY = isPinchRing ? (py(4) + py(8)) / 2 : pc.y * h;
   ctx.beginPath();
   ctx.arc(ringX, ringY, ringR, 0, Math.PI * 2);
-  if (hand.reflecting) {
-    ctx.strokeStyle = PURPLE;
-    ctx.lineWidth = base * 0.014;
-  } else if (hand.pinched) {
-    ctx.strokeStyle = "rgba(201,69,46,0.9)";
-    ctx.lineWidth = base * 0.01;
-  } else if (hand.open) {
-    ctx.strokeStyle = "rgba(255,253,247,0.95)";
-    ctx.lineWidth = base * 0.012;
-  } else {
-    ctx.strokeStyle = "rgba(255,253,247,0.35)";
-    ctx.lineWidth = base * 0.007;
+  switch (kind) {
+    case "reflect":
+      ctx.strokeStyle = PURPLE;
+      ctx.lineWidth = base * 0.014;
+      break;
+    case "heal":
+      ctx.strokeStyle = "rgba(201,69,46,0.9)";
+      ctx.lineWidth = base * 0.01;
+      break;
+    case "shoot":
+      ctx.strokeStyle = YELLOW;
+      ctx.lineWidth = base * 0.01;
+      break;
+    case "catch":
+      ctx.strokeStyle = "rgba(255,253,247,0.95)";
+      ctx.lineWidth = base * 0.012;
+      break;
+    default:
+      ctx.strokeStyle = "rgba(255,253,247,0.35)";
+      ctx.lineWidth = base * 0.007;
   }
   ctx.setLineDash([base * 0.045, base * 0.03]);
   ctx.lineDashOffset = -(now / 40);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // ピンチ中は指ハートの位置に小さなハート
-  if (hand.pinched) {
+  // 回復/発射ピンチ中は指ハートの位置に小さなハート
+  if (isPinchRing) {
     const mx = (px(4) + px(8)) / 2;
     const my = (py(4) + py(8)) / 2;
     drawHeart(ctx, mx, my, base * 0.045, RED);
   }
   // 🤟中は手のひら(判定点)に紫ハート
-  if (hand.reflecting) {
+  if (kind === "reflect") {
     drawHeart(ctx, pc.x * w, pc.y * h, base * 0.04, PURPLE);
   }
 }
