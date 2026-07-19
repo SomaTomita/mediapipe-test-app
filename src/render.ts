@@ -3,11 +3,11 @@
 import {
   type Heart,
   type Point,
-  type Facing,
+  type PinchPose,
   heartPosition,
   palmCenter,
   CATCH_RADIUS,
-  PINCH_CATCH_RADIUS,
+  HEAL_CATCH_RADIUS,
   REFLECT_RADIUS,
 } from "./game";
 
@@ -32,7 +32,7 @@ export interface SkeletonHand {
   pinched: boolean;
   reflecting: boolean; // 🤟中
   open: boolean; // 🫴 お皿の手(キャッチ可能)
-  facing: Facing; // 手のひら/手の甲の向き(回復/発射ピンチの区別に使う)
+  pose: PinchPose; // つまみ姿勢(中指/薬指/小指の伸び具合。回復/発射ピンチの区別に使う)
 }
 
 /** リングの表示種別。手の状態(reflecting/pinched+facing/open)から一意に決まる。 */
@@ -41,8 +41,8 @@ export type RingKind = "reflect" | "heal" | "shoot" | "catch" | "idle";
 /** 手の状態から状態リングの種別を判定する(優先順位: reflect > heal > shoot > catch > idle)。 */
 export function ringKind(hand: SkeletonHand): RingKind {
   if (hand.reflecting) return "reflect";
-  if (hand.pinched && hand.facing === "palm") return "heal";
-  if (hand.pinched && hand.facing === "back") return "shoot";
+  if (hand.pinched && hand.pose === "ok") return "heal";
+  if (hand.pinched && hand.pose === "heart") return "shoot";
   if (hand.open) return "catch";
   return "idle";
 }
@@ -168,7 +168,7 @@ function drawSkeleton(
   // 🤟=紫 / 👌手のひらピンチ=回復(赤系) / 🫰手の甲ピンチ=発射(黄色系) / ✋パー=白(キャッチ可能) / それ以外=薄いグレー
   const kind = ringKind(hand);
   const isPinchRing = kind === "heal" || kind === "shoot";
-  const ringR = base * (kind === "reflect" ? REFLECT_RADIUS : isPinchRing ? PINCH_CATCH_RADIUS : CATCH_RADIUS);
+  const ringR = base * (kind === "reflect" ? REFLECT_RADIUS : kind === "heal" ? HEAL_CATCH_RADIUS : CATCH_RADIUS);
   const pc = palmCenter(pts) ?? pts[9]; // 判定点(main.ts と同じ手のひら中心)
   const ringX = isPinchRing ? (px(4) + px(8)) / 2 : pc.x * w;
   const ringY = isPinchRing ? (py(4) + py(8)) / 2 : pc.y * h;

@@ -397,7 +397,7 @@ function loop() {
           pinched,
           reflecting,
           open,
-          facing: pose,
+          pose,
         },
       ]
     : [];

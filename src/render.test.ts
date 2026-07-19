@@ -57,17 +57,17 @@ describe("ringKind(手の状態→リング種別)", () => {
     pinched: false,
     reflecting: false,
     open: false,
-    facing: "unknown",
+    pose: "unknown",
     ...o,
   });
   it("🤟中は reflect が最優先", () => {
     expect(ringKind(hand({ reflecting: true, pinched: true }))).toBe("reflect");
   });
   it("手のひらピンチは heal", () => {
-    expect(ringKind(hand({ pinched: true, facing: "palm" }))).toBe("heal");
+    expect(ringKind(hand({ pinched: true, pose: "ok" }))).toBe("heal");
   });
   it("手の甲ピンチは shoot", () => {
-    expect(ringKind(hand({ pinched: true, facing: "back" }))).toBe("shoot");
+    expect(ringKind(hand({ pinched: true, pose: "heart" }))).toBe("shoot");
   });
   it("パーは catch", () => {
     expect(ringKind(hand({ open: true }))).toBe("catch");
