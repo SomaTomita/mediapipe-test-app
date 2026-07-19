@@ -33,9 +33,13 @@ import {
   isHealPinch,
   isFingerHeart,
   updateShoot,
+  extendedMRP,
+  palmSpread,
+  formatGestureDebug,
   type ShootHold,
   type PinchPose,
   type PoseState,
+  type DebugGesture,
   type Heart,
   type HeartKind,
   type Match,
@@ -79,6 +83,15 @@ const hudTheirLabel = $("hud-their-label");
 const loading = $("loading");
 const loadingText = $("loading-text");
 const toastEl = $("toast");
+
+// ---- デバッグHUD(?debug=1で実機のジェスチャー内部値を可視化) ----
+const debugHud: HTMLPreElement | null = (() => {
+  if (new URLSearchParams(location.search).get("debug") !== "1") return null;
+  const el = document.createElement("pre");
+  el.id = "debug-hud";
+  screens.battle.appendChild(el);
+  return el;
+})();
 
 // ---- 状態 ----
 type Mode = "duo" | "solo";
@@ -287,6 +300,9 @@ function loop() {
   const pose = poseState.current;
   // 🫰 指ハート: 中指/薬指/小指を折り畳んだピンチ(発射トリガ)
   const fingerHeart = isFingerHeart(hand?.landmarks ?? [], pose);
+  // 👌 つまみ: 中指/薬指/小指が伸びたピンチ(回復トリガ)。デバッグHUD表示にも使うため
+  // if (playing) の外側で先に求めておく
+  const pinchCatching = isHealPinch(hand?.landmarks ?? [], pose);
   // 分類(ILoveYou)が None に転んでも幾何判定でフォールバック
   const reflecting = !!hand && (hand.iloveyou || isILoveYou(hand.landmarks));
 
@@ -329,7 +345,6 @@ function loop() {
     // キャッチ: 👌つまみ=つまみキャッチ(回復)、🫴お皿の手=通常キャッチ
     // (🤟中はクールダウン中でもキャッチ不可 → canOpenCatch の意図コメント参照)
     // 回復: 👌 中指/薬指/小指が伸びたピンチ(顔の近さは問わない)
-    const pinchCatching = isHealPinch(hand?.landmarks ?? [], pose);
     if (pinchCatching || canOpenCatch(open, pinched, reflecting)) {
       const catchPoint = pinchCatching ? pinchDisp : palmDisp;
       const radius = pinchCatching ? HEAL_CATCH_RADIUS : CATCH_RADIUS;
@@ -387,6 +402,30 @@ function loop() {
   } else {
     reflectCd.classList.remove("cooling");
     reflectCdNum.textContent = "";
+  }
+
+  // デバッグHUD: 実機での閾値調整用に伸び本数・pose・pinch・広がり比・現在のジェスチャーを表示
+  if (debugHud) {
+    if (hand) {
+      const gesture: DebugGesture = reflecting
+        ? "reflect"
+        : pinchCatching
+          ? "heal"
+          : fingerHeart
+            ? "shoot"
+            : open
+              ? "catch"
+              : "none";
+      debugHud.textContent = formatGestureDebug({
+        extended: extendedMRP(hand.landmarks),
+        pose,
+        pinched,
+        spread: palmSpread(hand.landmarks),
+        gesture,
+      });
+    } else {
+      debugHud.textContent = "no hand";
+    }
   }
 
   effects = pruneEffects(effects, now);
