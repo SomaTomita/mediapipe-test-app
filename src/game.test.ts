@@ -47,6 +47,8 @@ import {
   updateShoot,
   isThumbIndexCrossed,
   pinchPose,
+  palmSpread,
+  formatGestureDebug,
   type ShootHold,
   type ShootInput,
   type Heart,
@@ -596,6 +598,53 @@ describe("pinchPose(👌つまみ / 🫰指ハートの分類)", () => {
   });
   it("ランドマークが揃っていなければ unknown", () => {
     expect(pinchPose([])).toBe("unknown");
+  });
+});
+
+describe("palmSpread(補助診断用の手の広がり比)", () => {
+  // 手首(0)・中指MCP(9)で手のひらの基準長を作り、人差し指MCP(5)/小指MCP(17)の
+  // 開き幅との比を見る。
+  const hand = (spread5: number, spread17: number): Point[] => {
+    const pts: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.8 }));
+    pts[0] = { x: 0.5, y: 0.9 }; // 手首
+    pts[9] = { x: 0.5, y: 0.8 }; // 中指MCP(手首から palmLen=0.1)
+    pts[5] = { x: spread5, y: 0.8 };
+    pts[17] = { x: spread17, y: 0.8 };
+    return pts;
+  };
+
+  it("手が広く開いていれば比が大きい(frontal な👌想定)", () => {
+    const wide = palmSpread(hand(0.3, 0.7)); // |5-17| = 0.4 / palmLen 0.1 = 4.0
+    const narrow = palmSpread(hand(0.48, 0.52)); // |5-17| = 0.04 / palmLen 0.1 = 0.4
+    expect(wide).not.toBeNull();
+    expect(narrow).not.toBeNull();
+    expect(wide!).toBeGreaterThan(narrow!);
+    expect(wide).toBeCloseTo(4.0);
+    expect(narrow).toBeCloseTo(0.4);
+  });
+
+  it("ランドマークが揃っていなければ null", () => {
+    expect(palmSpread([])).toBeNull();
+  });
+
+  it("手首と中指MCPが重なる(palmLen=0)ときは null", () => {
+    const pts = hand(0.3, 0.7);
+    pts[0] = { x: 0.5, y: 0.8 }; // 中指MCP(9)と同一点にして palmLen を 0 にする
+    expect(palmSpread(pts)).toBeNull();
+  });
+});
+
+describe("formatGestureDebug(デバッグHUD表示)", () => {
+  it("伸び本数・姿勢・ジェスチャー・(参考)広がり比を1行に", () => {
+    const s = formatGestureDebug({ extended: 3, pose: "ok", pinched: true, spread: 0.72, gesture: "heal" });
+    expect(s).toContain("ext=3");
+    expect(s).toContain("ok");
+    expect(s).toContain("heal");
+    expect(s).toContain("spread=0.72");
+  });
+  it("spread が null なら n/a", () => {
+    const s = formatGestureDebug({ extended: 0, pose: "unknown", pinched: false, spread: null, gesture: "none" });
+    expect(s).toContain("spread=n/a");
   });
 });
 

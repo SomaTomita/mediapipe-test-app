@@ -204,6 +204,20 @@ export function palmSpread(landmarks: Point[]): number | null {
   return Math.hypot(landmarks[5].x - landmarks[17].x, landmarks[5].y - landmarks[17].y) / palmLen;
 }
 
+export type DebugGesture = "heal" | "shoot" | "catch" | "reflect" | "none";
+
+/** デバッグHUD(?debug=1)用の1行フォーマット。実機での閾値調整に使う。 */
+export function formatGestureDebug(d: {
+  extended: number;
+  pose: PinchPose;
+  pinched: boolean;
+  spread: number | null;
+  gesture: DebugGesture;
+}): string {
+  const spread = d.spread === null ? "n/a" : d.spread.toFixed(2);
+  return `ext=${d.extended} | ${d.pose} | pinch=${d.pinched ? "1" : "0"} | spread=${spread} | ${d.gesture}`;
+}
+
 export const POSE_STABLE_FRAMES = 4;
 
 export interface PoseState {
