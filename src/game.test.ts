@@ -48,10 +48,14 @@ import {
   isFingerHeart,
   updateShoot,
   isThumbIndexCrossed,
+  pinchPose,
+  OK_MIN_EXTENDED,
+  HEART_MAX_EXTENDED,
   type ShootHold,
   type ShootInput,
   type Heart,
   type Point,
+  type PinchPose,
 } from "./game";
 
 describe("resolveShot(指ハート発射)", () => {
@@ -605,6 +609,40 @@ describe("isThumbIndexCrossed(指ハートのクロス確証)", () => {
   });
   it("ランドマークが揃っていなければ false", () => {
     expect(isThumbIndexCrossed([])).toBe(false);
+  });
+});
+
+describe("pinchPose(👌つまみ / 🫰指ハートの分類)", () => {
+  // 中指(9→12)/薬指(13→16)/小指(17→20)の伸び具合で合成データを作る。
+  // 手首0を基準に、tip が MCP の OPEN_HAND_RATIO 倍より遠ければ「伸びている」。
+  const hand = (mrpTipDists: [number, number, number]): Point[] => {
+    const pts: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.9 }));
+    pts[0] = { x: 0.5, y: 0.9 }; // 手首
+    const mcps: [number, number][] = [
+      [9, 12],
+      [13, 16],
+      [17, 20],
+    ];
+    mcps.forEach(([mcp, tip], k) => {
+      pts[mcp] = { x: 0.44 + k * 0.05, y: 0.78 }; // 手首から約 0.12
+      pts[tip] = { x: 0.44 + k * 0.05, y: 0.9 - mrpTipDists[k] };
+    });
+    return pts;
+  };
+  it("中指/薬指/小指が3本伸びれば ok(👌)", () => {
+    expect(pinchPose(hand([0.3, 0.3, 0.28]))).toBe("ok");
+  });
+  it("3本とも折り畳めば heart(🫰)", () => {
+    expect(pinchPose(hand([0.08, 0.08, 0.08]))).toBe("heart");
+  });
+  it("2本だけ伸びる中間は unknown(取り違え防止のデッドバンド)", () => {
+    expect(pinchPose(hand([0.3, 0.3, 0.08]))).toBe("unknown");
+  });
+  it("1本だけ伸びは heart 側(HEART_MAX_EXTENDED=1)", () => {
+    expect(pinchPose(hand([0.3, 0.08, 0.08]))).toBe("heart");
+  });
+  it("ランドマークが揃っていなければ unknown", () => {
+    expect(pinchPose([])).toBe("unknown");
   });
 });
 
