@@ -11,7 +11,6 @@ const GESTURE_MODEL_URL =
 export interface HandDet {
   landmarks: Point[]; // 21点(非ミラー正規化座標)
   iloveyou: boolean; // 🤟 サイン(弾き返し)
-  isRight: boolean; // MediaPipe handedness が Right か(手の向き判定に使用。現実の符号は handFacing の invert 引数で校正)
 }
 
 export interface Detection {
@@ -77,7 +76,6 @@ export async function createTracker(video: HTMLVideoElement): Promise<Tracker> {
       const hands: HandDet[] = (handResult.landmarks ?? []).map((lms, i) => ({
         landmarks: lms.map((lm) => ({ x: lm.x, y: lm.y })),
         iloveyou: handResult.gestures?.[i]?.[0]?.categoryName === "ILoveYou",
-        isRight: handResult.handedness?.[i]?.[0]?.categoryName === "Right",
       }));
 
       return {

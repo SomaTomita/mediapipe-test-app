@@ -8,7 +8,7 @@ import {
   DAMAGE_SPECIAL,
   HEAL_PERFECT,
   PINCH_THRESHOLD,
-  PINCH_CATCH_RADIUS,
+  HEAL_CATCH_RADIUS,
   SPECIAL_FLIGHT_MS,
   SPECIAL_HOLD_MS,
   SPECIAL_COOLDOWN_MS,
@@ -137,13 +137,14 @@ describe("judgeCatch", () => {
     expect(judgeCatch(outRange, palm, 0).caught).toEqual([]);
   });
 
-  it("つまみキャッチの半径は 0.10(パーと同じ。パーより狭くはしない)", () => {
-    expect(PINCH_CATCH_RADIUS).toBe(0.1);
-    // つまむジェスチャー自体が難しいので、パーより狭くしてはいけない
-    expect(PINCH_CATCH_RADIUS).toBeGreaterThanOrEqual(CATCH_RADIUS);
-    const hearts = spawnHeart([], 1, 0.5 + PINCH_CATCH_RADIUS, 0);
+  it("回復キャッチの半径は 0.07(パー 0.10 より狭め: ユーザー要望)", () => {
+    expect(HEAL_CATCH_RADIUS).toBe(0.07);
+    expect(HEAL_CATCH_RADIUS).toBeLessThan(CATCH_RADIUS);
+    const inRange = spawnHeart([], 1, 0.5 + HEAL_CATCH_RADIUS - 1e-9, 0); // 浮動小数の丸め誤差(0.5+0.07-0.5>0.07)を避けてわずかに内側に
+    const outRange = spawnHeart([], 2, 0.5 + HEAL_CATCH_RADIUS + 0.01, 0);
     const palm = { x: 0.5, y: 0 };
-    expect(judgeCatch(hearts, palm, 0, PINCH_CATCH_RADIUS).caught).toEqual([1]);
+    expect(judgeCatch(inRange, palm, 0, HEAL_CATCH_RADIUS).caught).toEqual([1]);
+    expect(judgeCatch(outRange, palm, 0, HEAL_CATCH_RADIUS).caught).toEqual([]);
   });
 
   it("palmCenter は中指MCP(9)を手首(0)方向へ 35% 寄せた点(付け根そのままだと高すぎる)", () => {
