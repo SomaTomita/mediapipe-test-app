@@ -103,16 +103,16 @@ export function resolveShot(heldMs: number, now: number, lastShotAt: number, las
   return "normal";
 }
 
-/** 👌 手のひらを見せたピンチ = 回復(つまみキャッチ)。発射はしない。 */
-export function isHealPinch(landmarks: Point[], facing: Facing): boolean {
+/** 👌 つまみ(中指/薬指/小指が伸びる)= 回復。発射しない。 */
+export function isHealPinch(landmarks: Point[], pose: PinchPose): boolean {
   if (landmarks.length < 21) return false;
-  return facing === "palm" && isPinched(landmarks[4], landmarks[8]);
+  return pose === "ok" && isPinched(landmarks[4], landmarks[8]);
 }
 
-/** 🫰 手の甲を見せた指ハート(ピンチ) = 発射。 */
-export function isFingerHeart(landmarks: Point[], facing: Facing): boolean {
+/** 🫰 指ハート(他3本を折り畳む)= 発射。 */
+export function isFingerHeart(landmarks: Point[], pose: PinchPose): boolean {
   if (landmarks.length < 21) return false;
-  return facing === "back" && isPinched(landmarks[4], landmarks[8]);
+  return pose === "heart" && isPinched(landmarks[4], landmarks[8]);
 }
 
 // 人差し指の軸に対する親指先の符号側。指ハート(クロス)確証に使う任意判定。
@@ -139,15 +139,15 @@ export interface ShootHold {
 export interface ShootInput {
   fingerHeart: boolean;
   pinched: boolean;
-  facing: Facing;
+  pose: PinchPose;
   handPresent: boolean;
 }
 
 /**
  * 🫰 発射ステートマシン。fireHeldMs !== null のフレームで発射する(値は長押し時間)。
- * 発射は「指を物理的に開いた瞬間」のみ。手の甲ピンチのまま手首を返して👌回復に
- * 持ち替えたとき(ピンチ維持で facing が palm へ)は、指を開いていないのに発射扱いに
- * なる誤爆を防ぐため、発射せずにキャンセルする。向き不定(unknown)は回転途中の
+ * 発射は「指を物理的に開いた瞬間」のみ。指ハートのピンチのまま👌回復に
+ * 持ち替えたとき(ピンチ維持で pose が ok へ)は、指を開いていないのに発射扱いに
+ * なる誤爆を防ぐため、発射せずにキャンセルする。姿勢不定(unknown)は取り違え途中の
  * 猶予として保持し、手を見失ったフレームでは発射しない。
  */
 export function updateShoot(
@@ -157,7 +157,7 @@ export function updateShoot(
 ): { state: ShootHold | null; fireHeldMs: number | null } {
   if (!input.handPresent) return { state: null, fireHeldMs: null };
   if (state && !input.pinched) return { state: null, fireHeldMs: now - state.startedAt };
-  if (state && input.facing === "palm") return { state: null, fireHeldMs: null };
+  if (state && input.pose === "ok") return { state: null, fireHeldMs: null };
   if (input.fingerHeart && !state) return { state: { startedAt: now }, fireHeldMs: null };
   return { state, fireHeldMs: null };
 }
@@ -202,6 +202,27 @@ export function palmSpread(landmarks: Point[]): number | null {
   const palmLen = Math.hypot(mid.x - w.x, mid.y - w.y);
   if (palmLen < 1e-4) return null;
   return Math.hypot(landmarks[5].x - landmarks[17].x, landmarks[5].y - landmarks[17].y) / palmLen;
+}
+
+export const POSE_STABLE_FRAMES = 4;
+
+export interface PoseState {
+  current: PinchPose;
+  candidate: PinchPose;
+  count: number;
+}
+
+export function initPoseState(): PoseState {
+  return { current: "unknown", candidate: "unknown", count: 0 };
+}
+
+/** 姿勢サンプルをヒステリシスで安定化する。unknown は無視して直前を保持。 */
+export function updatePose(state: PoseState, sample: PinchPose): PoseState {
+  if (sample === "unknown") return state;
+  if (sample === state.current) return { ...state, candidate: sample, count: 0 };
+  const count = sample === state.candidate ? state.count + 1 : 1;
+  if (count >= POSE_STABLE_FRAMES) return { current: sample, candidate: sample, count: 0 };
+  return { ...state, candidate: sample, count };
 }
 
 // ---- 手のひら中心 ----
