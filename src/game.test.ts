@@ -8,7 +8,7 @@ import {
   DAMAGE_SPECIAL,
   HEAL_PERFECT,
   PINCH_THRESHOLD,
-  PINCH_CATCH_RADIUS,
+  HEAL_CATCH_RADIUS,
   SPECIAL_FLIGHT_MS,
   SPECIAL_HOLD_MS,
   SPECIAL_COOLDOWN_MS,
@@ -39,15 +39,14 @@ import {
   healHp,
   onOpponentLife,
   pickPrompt,
-  handFacing,
-  FACING_DEADZONE,
-  updateFacing,
-  initFacingState,
-  FACING_STABLE_FRAMES,
+  updatePose,
+  initPoseState,
+  POSE_STABLE_FRAMES,
   isHealPinch,
   isFingerHeart,
   updateShoot,
   isThumbIndexCrossed,
+  pinchPose,
   type ShootHold,
   type ShootInput,
   type Heart,
@@ -138,13 +137,14 @@ describe("judgeCatch", () => {
     expect(judgeCatch(outRange, palm, 0).caught).toEqual([]);
   });
 
-  it("つまみキャッチの半径は 0.10(パーと同じ。パーより狭くはしない)", () => {
-    expect(PINCH_CATCH_RADIUS).toBe(0.1);
-    // つまむジェスチャー自体が難しいので、パーより狭くしてはいけない
-    expect(PINCH_CATCH_RADIUS).toBeGreaterThanOrEqual(CATCH_RADIUS);
-    const hearts = spawnHeart([], 1, 0.5 + PINCH_CATCH_RADIUS, 0);
+  it("回復キャッチの半径は 0.07(パー 0.10 より狭め: ユーザー要望)", () => {
+    expect(HEAL_CATCH_RADIUS).toBe(0.07);
+    expect(HEAL_CATCH_RADIUS).toBeLessThan(CATCH_RADIUS);
+    const inRange = spawnHeart([], 1, 0.5 + HEAL_CATCH_RADIUS - 1e-9, 0); // 浮動小数の丸め誤差(0.5+0.07-0.5>0.07)を避けてわずかに内側に
+    const outRange = spawnHeart([], 2, 0.5 + HEAL_CATCH_RADIUS + 0.01, 0);
     const palm = { x: 0.5, y: 0 };
-    expect(judgeCatch(hearts, palm, 0, PINCH_CATCH_RADIUS).caught).toEqual([1]);
+    expect(judgeCatch(inRange, palm, 0, HEAL_CATCH_RADIUS).caught).toEqual([1]);
+    expect(judgeCatch(outRange, palm, 0, HEAL_CATCH_RADIUS).caught).toEqual([]);
   });
 
   it("palmCenter は中指MCP(9)を手首(0)方向へ 35% 寄せた点(付け根そのままだと高すぎる)", () => {
@@ -416,83 +416,40 @@ describe("coverMap(object-fit: cover の座標補正)", () => {
   });
 });
 
-describe("handFacing(手のひら/手の甲の向き判定)", () => {
-  // 非ミラー生座標(y下向き)。手首0・人差し指MCP5・小指MCP17 の 2D 外積で判定。
-  // 右手・手のひら向きの合成データ(この座標系での符号規約をテストで固定する)
-  const palmRight = (): Point[] => {
-    const pts: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.9 }));
-    pts[0] = { x: 0.5, y: 0.9 }; // 手首
-    pts[5] = { x: 0.42, y: 0.55 }; // 人差し指MCP
-    pts[17] = { x: 0.6, y: 0.58 }; // 小指MCP
-    return pts;
-  };
-  // 手の甲向きは左右(人差し指MCPと小指MCPのx)が入れ替わる
-  const backRight = (): Point[] => {
-    const pts = palmRight();
-    pts[5] = { x: 0.6, y: 0.55 };
-    pts[17] = { x: 0.42, y: 0.58 };
-    return pts;
-  };
-
-  it("右手・手のひら向きは palm", () => {
-    expect(handFacing(palmRight(), true)).toBe("palm");
-  });
-  it("右手・手の甲向きは back", () => {
-    expect(handFacing(backRight(), true)).toBe("back");
-  });
-  it("左手は右手と符号が反転する(同じ座標なら palm→back)", () => {
-    expect(handFacing(palmRight(), false)).toBe("back");
-  });
-  it("invert=true で最終判定が反転する(現実側の符号校正用)", () => {
-    expect(handFacing(palmRight(), true, true)).toBe("back");
-  });
-  it("外積がデッドゾーン未満(手が端を向く)なら unknown", () => {
-    expect(FACING_DEADZONE).toBeGreaterThan(0);
-    const flat: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.9 }));
-    flat[0] = { x: 0.5, y: 0.9 };
-    flat[5] = { x: 0.5, y: 0.6 };
-    flat[17] = { x: 0.5, y: 0.62 }; // 手首と一直線 → 外積≒0
-    expect(handFacing(flat, true)).toBe("unknown");
-  });
-  it("ランドマークが揃っていなければ unknown", () => {
-    expect(handFacing([], true)).toBe("unknown");
-  });
-});
-
-describe("updateFacing(向きのヒステリシス安定化)", () => {
+describe("updatePose(つまみ姿勢のヒステリシス安定化)", () => {
   it("初期状態は unknown", () => {
-    expect(initFacingState().current).toBe("unknown");
+    expect(initPoseState().current).toBe("unknown");
   });
-  it("連続 FACING_STABLE_FRAMES フレーム一致で初めて確定する", () => {
-    let s = initFacingState();
-    for (let i = 0; i < FACING_STABLE_FRAMES - 1; i++) s = updateFacing(s, "palm");
-    expect(s.current).toBe("unknown"); // まだ確定しない
-    s = updateFacing(s, "palm");
-    expect(s.current).toBe("palm"); // ここで確定
+  it("連続 POSE_STABLE_FRAMES フレーム一致で初めて確定する", () => {
+    let s = initPoseState();
+    for (let i = 0; i < POSE_STABLE_FRAMES - 1; i++) s = updatePose(s, "ok");
+    expect(s.current).toBe("unknown");
+    s = updatePose(s, "ok");
+    expect(s.current).toBe("ok");
   });
   it("単発の逆サンプルでは反転しない(ノイズ耐性)", () => {
-    let s = initFacingState();
-    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "palm");
-    s = updateFacing(s, "back"); // 1フレームだけ back
-    expect(s.current).toBe("palm");
+    let s = initPoseState();
+    for (let i = 0; i < POSE_STABLE_FRAMES; i++) s = updatePose(s, "ok");
+    s = updatePose(s, "heart");
+    expect(s.current).toBe("ok");
   });
   it("unknown サンプルは無視して直前状態を保持する", () => {
-    let s = initFacingState();
-    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "palm");
-    s = updateFacing(s, "unknown");
-    expect(s.current).toBe("palm");
+    let s = initPoseState();
+    for (let i = 0; i < POSE_STABLE_FRAMES; i++) s = updatePose(s, "ok");
+    s = updatePose(s, "unknown");
+    expect(s.current).toBe("ok");
   });
   it("連続一致すれば正しく切り替わる", () => {
-    let s = initFacingState();
-    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "palm");
-    for (let i = 0; i < FACING_STABLE_FRAMES; i++) s = updateFacing(s, "back");
-    expect(s.current).toBe("back");
+    let s = initPoseState();
+    for (let i = 0; i < POSE_STABLE_FRAMES; i++) s = updatePose(s, "ok");
+    for (let i = 0; i < POSE_STABLE_FRAMES; i++) s = updatePose(s, "heart");
+    expect(s.current).toBe("heart");
   });
 });
 
-describe("isHealPinch(👌 手のひらピンチ=回復)/ isFingerHeart(🫰 手の甲ピンチ=発射)", () => {
-  const pinchHand = (facingPts: Point[]): Point[] => {
-    const pts = [...facingPts];
+describe("isHealPinch(👌 3本伸び=回復)/ isFingerHeart(🫰 3本折り畳み=発射)", () => {
+  const pinchHand = (basePts: Point[]): Point[] => {
+    const pts = [...basePts];
     pts[4] = { x: 0.5, y: 0.5 }; // 親指先
     pts[8] = { x: 0.5 + PINCH_THRESHOLD - 0.001, y: 0.5 }; // 人差し指先(ピンチ距離内)
     return pts;
@@ -505,36 +462,36 @@ describe("isHealPinch(👌 手のひらピンチ=回復)/ isFingerHeart(🫰 手
     return pts;
   };
 
-  it("手のひら向き + ピンチなら回復ピンチ", () => {
-    expect(isHealPinch(pinchHand(palm()), "palm")).toBe(true);
+  it("pose=ok + ピンチなら回復ピンチ", () => {
+    expect(isHealPinch(pinchHand(palm()), "ok")).toBe(true);
   });
-  it("手の甲向きのピンチは回復ではない(発射側)", () => {
-    expect(isHealPinch(pinchHand(palm()), "back")).toBe(false);
+  it("pose=heart のピンチは回復ではない(発射側)", () => {
+    expect(isHealPinch(pinchHand(palm()), "heart")).toBe(false);
   });
-  it("向き不定なら回復ではない", () => {
+  it("pose=unknown なら回復ではない", () => {
     expect(isHealPinch(pinchHand(palm()), "unknown")).toBe(false);
   });
   it("ピンチしていなければ回復ではない", () => {
     const open = palm();
     open[4] = { x: 0.3, y: 0.4 };
     open[8] = { x: 0.7, y: 0.4 };
-    expect(isHealPinch(open, "palm")).toBe(false);
+    expect(isHealPinch(open, "ok")).toBe(false);
   });
 
-  it("手の甲向き + ピンチなら指ハート(発射)", () => {
-    expect(isFingerHeart(pinchHand(palm()), "back")).toBe(true);
+  it("pose=heart + ピンチなら指ハート(発射)", () => {
+    expect(isFingerHeart(pinchHand(palm()), "heart")).toBe(true);
   });
-  it("手のひら向きのピンチは指ハートではない(回復側)", () => {
-    expect(isFingerHeart(pinchHand(palm()), "palm")).toBe(false);
+  it("pose=ok のピンチは指ハートではない(回復側)", () => {
+    expect(isFingerHeart(pinchHand(palm()), "ok")).toBe(false);
   });
-  it("向き不定なら指ハートではない", () => {
+  it("pose=unknown なら指ハートではない", () => {
     expect(isFingerHeart(pinchHand(palm()), "unknown")).toBe(false);
   });
   it("ピンチしていなければ指ハートではない", () => {
     const open = palm();
     open[4] = { x: 0.3, y: 0.4 };
     open[8] = { x: 0.7, y: 0.4 };
-    expect(isFingerHeart(open, "back")).toBe(false);
+    expect(isFingerHeart(open, "heart")).toBe(false);
   });
 });
 
@@ -542,36 +499,36 @@ describe("updateShoot(🫰 発射ステートマシン)", () => {
   const input = (o: Partial<ShootInput>): ShootInput => ({
     fingerHeart: false,
     pinched: false,
-    facing: "unknown",
+    pose: "unknown",
     handPresent: true,
     ...o,
   });
   const held: ShootHold = { startedAt: 1000 };
 
   it("指ハート開始で state が生まれる", () => {
-    const r = updateShoot(null, input({ fingerHeart: true, pinched: true, facing: "back" }), 1000);
+    const r = updateShoot(null, input({ fingerHeart: true, pinched: true, pose: "heart" }), 1000);
     expect(r).toEqual({ state: { startedAt: 1000 }, fireHeldMs: null });
   });
   it("指ハート維持中は state 据え置き・発射しない(startedAt を保存)", () => {
-    const r = updateShoot(held, input({ fingerHeart: true, pinched: true, facing: "back" }), 1500);
+    const r = updateShoot(held, input({ fingerHeart: true, pinched: true, pose: "heart" }), 1500);
     expect(r.state).toBe(held);
     expect(r.fireHeldMs).toBeNull();
   });
   it("指を開いたら発射(fireHeldMs = 長押し時間)", () => {
-    const r = updateShoot(held, input({ fingerHeart: false, pinched: false, facing: "back" }), 1800);
+    const r = updateShoot(held, input({ fingerHeart: false, pinched: false, pose: "heart" }), 1800);
     expect(r).toEqual({ state: null, fireHeldMs: 800 });
   });
-  it("手のひらへ持ち替えたらキャンセル(ピンチ維持のまま facing が palm)", () => {
-    const r = updateShoot(held, input({ fingerHeart: false, pinched: true, facing: "palm" }), 1800);
+  it("👌へ持ち替えたらキャンセル(ピンチ維持のまま pose が ok)", () => {
+    const r = updateShoot(held, input({ fingerHeart: false, pinched: true, pose: "ok" }), 1800);
     expect(r).toEqual({ state: null, fireHeldMs: null });
   });
   it("向き不定(unknown)でピンチ維持中は保持する(回転中の猶予)", () => {
-    const r = updateShoot(held, input({ fingerHeart: false, pinched: true, facing: "unknown" }), 1800);
+    const r = updateShoot(held, input({ fingerHeart: false, pinched: true, pose: "unknown" }), 1800);
     expect(r.state).toBe(held);
     expect(r.fireHeldMs).toBeNull();
   });
-  it("facing が back のままピンチ維持も保持する", () => {
-    const r = updateShoot(held, input({ fingerHeart: true, pinched: true, facing: "back" }), 2000);
+  it("pose が heart のままピンチ維持も保持する", () => {
+    const r = updateShoot(held, input({ fingerHeart: true, pinched: true, pose: "heart" }), 2000);
     expect(r.state).toBe(held);
     expect(r.fireHeldMs).toBeNull();
   });
@@ -580,7 +537,7 @@ describe("updateShoot(🫰 発射ステートマシン)", () => {
     expect(r).toEqual({ state: null, fireHeldMs: null });
   });
   it("state が null で指ハートでなければ何も起きない", () => {
-    const r = updateShoot(null, input({ pinched: true, facing: "palm" }), 1800);
+    const r = updateShoot(null, input({ pinched: true, pose: "ok" }), 1800);
     expect(r).toEqual({ state: null, fireHeldMs: null });
   });
 });
@@ -605,6 +562,40 @@ describe("isThumbIndexCrossed(指ハートのクロス確証)", () => {
   });
   it("ランドマークが揃っていなければ false", () => {
     expect(isThumbIndexCrossed([])).toBe(false);
+  });
+});
+
+describe("pinchPose(👌つまみ / 🫰指ハートの分類)", () => {
+  // 中指(9→12)/薬指(13→16)/小指(17→20)の伸び具合で合成データを作る。
+  // 手首0を基準に、tip が MCP の OPEN_HAND_RATIO 倍より遠ければ「伸びている」。
+  const hand = (mrpTipDists: [number, number, number]): Point[] => {
+    const pts: Point[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.9 }));
+    pts[0] = { x: 0.5, y: 0.9 }; // 手首
+    const mcps: [number, number][] = [
+      [9, 12],
+      [13, 16],
+      [17, 20],
+    ];
+    mcps.forEach(([mcp, tip], k) => {
+      pts[mcp] = { x: 0.44 + k * 0.05, y: 0.78 }; // 手首から約 0.12
+      pts[tip] = { x: 0.44 + k * 0.05, y: 0.9 - mrpTipDists[k] };
+    });
+    return pts;
+  };
+  it("中指/薬指/小指が3本伸びれば ok(👌)", () => {
+    expect(pinchPose(hand([0.3, 0.3, 0.28]))).toBe("ok");
+  });
+  it("3本とも折り畳めば heart(🫰)", () => {
+    expect(pinchPose(hand([0.08, 0.08, 0.08]))).toBe("heart");
+  });
+  it("2本だけ伸びる中間は unknown(取り違え防止のデッドバンド)", () => {
+    expect(pinchPose(hand([0.3, 0.3, 0.08]))).toBe("unknown");
+  });
+  it("1本だけ伸びは heart 側(HEART_MAX_EXTENDED=1)", () => {
+    expect(pinchPose(hand([0.3, 0.08, 0.08]))).toBe("heart");
+  });
+  it("ランドマークが揃っていなければ unknown", () => {
+    expect(pinchPose([])).toBe("unknown");
   });
 });
 

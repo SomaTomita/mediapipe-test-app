@@ -2,7 +2,7 @@ import "./style.css";
 import {
   MAX_HP,
   CATCH_RADIUS,
-  PINCH_CATCH_RADIUS,
+  HEAL_CATCH_RADIUS,
   HEAL_PERFECT,
   SPECIAL_HOLD_MS,
   REFLECT_COOLDOWN_MS,
@@ -27,15 +27,15 @@ import {
   palmCenter,
   isILoveYou,
   countdownLabel,
-  handFacing,
-  updateFacing,
-  initFacingState,
+  pinchPose,
+  updatePose,
+  initPoseState,
   isHealPinch,
   isFingerHeart,
   updateShoot,
   type ShootHold,
-  type Facing,
-  type FacingState,
+  type PinchPose,
+  type PoseState,
   type Heart,
   type HeartKind,
   type Match,
@@ -98,9 +98,7 @@ let theirRematch = false;
 
 // 指先系の状態(片手プレイ前提)。発射用の指ハート状態
 let shootState: ShootHold | null = null;
-// 現実側の手の向き符号校正。手動E2Eで反転していたら true にする(docs/plans 参照)
-const FACING_INVERT = false;
-let facingState: FacingState = initFacingState();
+let poseState: PoseState = initPoseState();
 let lastPinchMidRaw: Point | null = null;
 let lastShotAt = -Infinity;
 let lastSpecialAt = -Infinity;
@@ -284,11 +282,11 @@ function loop() {
   const pinchMidRaw = pinched && thumbTip && indexTip ? midpoint(thumbTip, indexTip) : null;
   if (pinchMidRaw) lastPinchMidRaw = pinchMidRaw;
   const open = hand ? isOpenHand(hand.landmarks) : false;
-  const facingSample: Facing = hand ? handFacing(hand.landmarks, hand.isRight, FACING_INVERT) : "unknown";
-  facingState = updateFacing(facingState, facingSample);
-  const facing = facingState.current;
-  // 🫰 指ハート: 手の甲を見せたピンチ(発射トリガ)
-  const fingerHeart = isFingerHeart(hand?.landmarks ?? [], facing);
+  const poseSample: PinchPose = hand ? pinchPose(hand.landmarks) : "unknown";
+  poseState = updatePose(poseState, poseSample);
+  const pose = poseState.current;
+  // 🫰 指ハート: 中指/薬指/小指を折り畳んだピンチ(発射トリガ)
+  const fingerHeart = isFingerHeart(hand?.landmarks ?? [], pose);
   // 分類(ILoveYou)が None に転んでも幾何判定でフォールバック
   const reflecting = !!hand && (hand.iloveyou || isILoveYou(hand.landmarks));
 
@@ -305,8 +303,8 @@ function loop() {
   const pinchDisp = pinchMidRaw ? toStage(pinchMidRaw) : null;
 
   if (playing) {
-    // 🫰 指ハート発射: 手の甲ピンチで蓄積、指を開いた瞬間に発射。👌へ持ち替えたらキャンセル
-    const shot = updateShoot(shootState, { fingerHeart, pinched, facing, handPresent: !!hand }, now);
+    // 🫰 指ハート発射: 折り畳みピンチで蓄積、指を開いた瞬間に発射。👌へ持ち替えたらキャンセル
+    const shot = updateShoot(shootState, { fingerHeart, pinched, pose, handPresent: !!hand }, now);
     shootState = shot.state;
     if (shot.fireHeldMs !== null && lastPinchMidRaw) {
       const kind = resolveShot(shot.fireHeldMs, now, lastShotAt, lastSpecialAt);
@@ -328,13 +326,13 @@ function loop() {
       }
     }
 
-    // キャッチ: 👌手のひらピンチ=つまみキャッチ(回復)、🫴お皿の手=通常キャッチ
+    // キャッチ: 👌つまみ=つまみキャッチ(回復)、🫴お皿の手=通常キャッチ
     // (🤟中はクールダウン中でもキャッチ不可 → canOpenCatch の意図コメント参照)
-    // 回復: 👌 手のひらを見せたピンチ(顔の近さは問わない)
-    const pinchCatching = isHealPinch(hand?.landmarks ?? [], facing);
+    // 回復: 👌 中指/薬指/小指が伸びたピンチ(顔の近さは問わない)
+    const pinchCatching = isHealPinch(hand?.landmarks ?? [], pose);
     if (pinchCatching || canOpenCatch(open, pinched, reflecting)) {
       const catchPoint = pinchCatching ? pinchDisp : palmDisp;
-      const radius = pinchCatching ? PINCH_CATCH_RADIUS : CATCH_RADIUS;
+      const radius = pinchCatching ? HEAL_CATCH_RADIUS : CATCH_RADIUS;
       const res = judgeCatch(hearts, catchPoint, now, radius);
       if (res.caught.length > 0) {
         hearts = res.remaining;
@@ -399,7 +397,7 @@ function loop() {
           pinched,
           reflecting,
           open,
-          facing,
+          pose,
         },
       ]
     : [];
@@ -424,7 +422,7 @@ function resetBattleState() {
   hearts = [];
   effects = [];
   shootState = null;
-  facingState = initFacingState();
+  poseState = initPoseState();
   lastPinchMidRaw = null;
   lastShotAt = -Infinity;
   lastSpecialAt = -Infinity;
